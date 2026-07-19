@@ -1,4 +1,9 @@
+import asyncio
+import logging
+
 import httpx
+
+log = logging.getLogger("deal-tracker")
 
 
 async def send_discord_alert(cfg: dict, product, deal_result):
@@ -29,4 +34,18 @@ async def send_discord_alert(cfg: dict, product, deal_result):
     payload = {"content": "🔥 **Nueva oferta detectada**", "embeds": [embed]}
 
     async with httpx.AsyncClient(timeout=10) as client:
-        await client.post(webhook_url, json=payload)
+        resp = await client.post(webhook_url, json=payload)
+        if resp.status_code == 429:
+            # Confirmado en producción (2026-07-19): con varias ofertas en el
+            # mismo escaneo, Discord rate-limita el webhook y el POST se
+            # pierde en silencio si no se reintenta. Un solo retry con el
+            # backoff que Discord indica alcanza — el burst es esporádico
+            # (normal solo la primera vez o tras perder el historial).
+            retry_after = 1.0
+            try:
+                retry_after = float(resp.headers.get("Retry-After") or resp.json().get("retry_after", 1.0))
+            except (ValueError, TypeError):
+                pass
+            log.warning("Discord rate limit (429), reintentando en %.1fs", retry_after)
+            await asyncio.sleep(retry_after)
+            await client.post(webhook_url, json=payload)
