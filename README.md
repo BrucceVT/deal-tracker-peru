@@ -1,109 +1,108 @@
 # Deal Tracker Perú 🇵🇪
 
-Rastrea ofertas de tecnología (laptops, PCs, celulares, TVs, etc.) en
-Falabella, Ripley, Plaza Vea y Oechsle, y te avisa por Discord, Telegram
-y/o notificación push del navegador (PWA) cuando detecta una oferta real.
+Cazador de **errores de precio** en tecnología (laptops, TVs, celulares,
+tablets) en Falabella, Ripley, Plaza Vea y Oechsle. Cuando un producto
+aparece a un precio absurdamente bajo — tipo una laptop buena a S/475 —
+avisa por Discord en el siguiente escaneo.
 
-## Cómo decide qué es "una oferta real"
+**No es un agregador de ofertas**: los descuentos comunes de 30-50% se
+ignoran a propósito. Solo alerta ante señales de error genuino.
 
-No se guía solo por el % de descuento (fácil de inflar subiendo el precio
-"original" antes de bajarlo). Combina 4 señales en `core/deal_engine.py`:
+📱 Dashboard público: **https://bruccevt.github.io/deal-tracker-peru/**
 
-1. Descuento grande vs. precio de lista de la tienda
-2. Precio absoluto dentro de un rango (piso y techo) que tú defines por
-   categoría (para cazar "errores de precio" como tu laptop a S/475, sin
-   confundir accesorios baratos como "laptop" barata)
-3. Es el precio más bajo que se ha visto de ESE producto específico
-4. Está muy por debajo del promedio histórico de ESE producto
+## Cómo decide qué es "un error de precio"
 
-Ajusta pesos y umbrales en `config.yaml`.
+Combina 4 señales en `core/deal_engine.py` (umbrales en `config.yaml`):
 
-## Instalación
+1. **Descuento drástico**: ≥80% vs el precio de lista tachado.
+2. **Rango de error absoluto**: el precio cae por debajo del mínimo normal
+   de mercado de su categoría (ej. una laptop nueva real nunca baja de
+   ~S/1,800 — si aparece una entre S/300-900, algo está mal). Esta señal
+   dispara sola: en un error de precio la tienda a veces ni muestra tachado.
+3. **Mínimo histórico**: es el precio más bajo jamás visto de ESE producto.
+4. **Caída histórica drástica**: ≥60% bajo el promedio histórico propio.
 
-```bash
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-playwright install chromium
-```
+El ruido se filtra con `exclude_keywords` (accesorios como "mochila para
+laptop", y baratos legítimos como reacondicionados o chromebooks).
 
-## Configurar notificaciones
+## Arquitectura de scraping (sin selectores CSS frágiles)
 
-Edita `config.yaml`:
+| Tienda | Método | Playwright |
+|---|---|---|
+| Falabella | JSON `__NEXT_DATA__` del SSR de Next.js, vía httpx | No |
+| Plaza Vea | API pública VTEX (`/api/catalog_system/pub/products/search/`) | No |
+| Oechsle | API pública VTEX | No |
+| Ripley | JSON `__NEXT_DATA__`, pero Cloudflare exige browser real | Sí |
 
-- **Discord**: crea un webhook en tu servidor (Configuración del canal →
-  Integraciones → Webhooks) y pega la URL.
-- **Telegram**: crea un bot con [@BotFather](https://t.me/BotFather),
-  copia el token, y consigue tu `chat_id` escribiéndole a
-  [@userinfobot](https://t.me/userinfobot).
-- **Web Push (PWA)**: genera las llaves VAPID:
-  ```bash
-  npx web-push generate-vapid-keys
-  ```
-  (más simple que el script de Python incluido). Pega ambas llaves en
-  `config.yaml`.
+Nota: VTEX responde `206 Partial Content` al paginar — es normal.
+
+## Producción (GitHub Actions — ya configurado en este repo)
+
+`.github/workflows/scan.yml` corre cada ~15 min:
+escanea → evalúa → alerta a Discord → persiste la DB en la rama `data` →
+republica el dashboard en GitHub Pages.
+
+Secretos (Settings → Secrets and variables → Actions):
+- `DISCORD_WEBHOOK_URL` — requerido (canal principal).
+- `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` — opcionales.
+
+Limitaciones conocidas:
+- El cron de GitHub es best-effort (retrasos de 5-30 min son normales).
+- **Ripley no funciona desde los runners** (Cloudflare bloquea IPs de
+  datacenter); solo aporta cuando el tracker corre en local/VPS.
+- GitHub desactiva los crons de repos públicos tras 60 días sin actividad —
+  llega un email para reactivarlo con un click.
 
 ## Correr localmente
 
-Terminal 1 — el tracker (scraping + alertas):
 ```bash
-python main.py           # loop infinito, revisa cada tienda en su intervalo
-python main.py --once    # una sola pasada por todas las tiendas activas y termina
-                          # (el modo que usa el workflow de GitHub Actions)
+python -m venv venv
+venv\Scripts\activate          # Linux/Mac: source venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium     # solo necesario para Ripley
+
+python main.py --once           # una pasada y termina (lo que corre CI)
+python main.py                  # loop continuo (uso local/VPS)
+
+# Dashboard web local (opcional):
+uvicorn web.app:app --port 8000
+
+# Tests:
+python -m pytest tests/ -v
 ```
 
-Terminal 2 — el dashboard web:
-```bash
-uvicorn web.app:app --host 0.0.0.0 --port 8000
-```
+Para recibir alertas en local sin tocar `config.yaml`, exporta
+`DISCORD_WEBHOOK_URL` como variable de entorno (tiene prioridad).
 
-Abre `http://localhost:8000` en tu celular (misma red WiFi) o despliega
-en un servidor para acceder desde cualquier lado y poder "Agregar a
-inicio" (PWA) y activar las notificaciones push.
+## Web Push / PWA (para un futuro VPS)
 
-## Desplegarlo 24/7
+El frontend en `web/` es una PWA completa con notificaciones push
+(suscripción VAPID + service worker con caché offline). Funciona en local,
+pero el push end-to-end necesita HTTPS y un servidor persistente — no aplica
+al modelo GitHub Actions. Si algún día se migra a un VPS: generar llaves con
+`npx web-push generate-vapid-keys`, pegarlas en `config.yaml`, y servir con
+Caddy/Nginx + HTTPS. En iPhone el push requiere "Agregar a inicio" (Safari).
 
-Este proyecto necesita correr de forma continua — Claude no puede
-mantenerlo corriendo por ti. Opciones, de más simple a más control:
-
-- **Un VPS barato** (Hetzner, DigitalOcean, ~$4-6/mes): sube el proyecto,
-  usa `systemd` o `tmux`/`screen` para dejar `main.py` y `uvicorn`
-  corriendo, y un dominio + Caddy/Nginx si quieres HTTPS (necesario para
-  que el push notification funcione fuera de localhost).
-- **Raspberry Pi en casa**: gratis si ya la tienes, mismo setup.
-- **GitHub Actions con cron**: más limitado (no puede correr "cada 45s"
-  de forma continua, mínimo cada 5 min, y no sirve para el dashboard
-  en vivo), pero sirve si te alcanza con revisiones cada 5-15 min.
-
-## ⚠️ Notas importantes
-
-- **Ritmo de escaneo**: configurado en `config.yaml` (`scan_interval`),
-  ya con jitter incluido en el scraper. No lo bajes de ~20-30s por tienda:
-  te arriesgas a que te bloqueen la IP. Para cazar errores de precio que
-  duran minutos, 30-45s ya es razonable.
-- **Selectores CSS**: los scrapers de `scrapers/*.py` son plantillas
-  realistas pero las tiendas cambian su HTML seguido. Si un scraper deja
-  de traer productos, inspecciona la página en el navegador y actualiza
-  los selectores (instrucciones dentro de cada archivo).
-- **Uso responsable**: esto es scraping de páginas públicas para uso
-  personal. Revisa los Términos de Servicio de cada tienda; evita
-  cargas agresivas y no redistribuyas los datos comercialmente.
-- **iOS**: las notificaciones push web funcionan en iPhone solo después
-  de "Agregar a pantalla de inicio" (Safari → compartir → Agregar a
-  inicio), por restricción de Apple.
-
-## Estructura del proyecto
+## Estructura
 
 ```
 deal-tracker/
-├── config.yaml          # tiendas, categorías, umbrales, notificaciones
-├── main.py              # loop principal: scrapea + evalúa + notifica
+├── config.yaml               # tiendas, keywords, umbrales de error, notificaciones
+├── main.py                   # loop / --once: scrapea + evalúa + notifica
 ├── core/
-│   ├── storage.py        # SQLite: productos, historial, alertas
-│   └── deal_engine.py     # lógica de qué cuenta como "oferta"
-├── scrapers/              # uno por tienda (Playwright + BeautifulSoup)
-├── notifiers/              # discord.py, telegram.py, webpush.py
-└── web/
-    ├── app.py              # FastAPI: dashboard + API + push subscribe
-    └── static/              # PWA (index.html, manifest.json, sw.js)
+│   ├── storage.py             # SQLite: productos, historial de precios, alertas
+│   └── deal_engine.py         # las 4 señales de error de precio
+├── scrapers/                  # vtex_api, falabella (httpx), ripley (Playwright)
+├── notifiers/                 # discord (con retry anti rate-limit), telegram, webpush
+├── scripts/
+│   └── generate_static_dashboard.py  # HTML para GitHub Pages
+├── web/                       # PWA local: FastAPI + static
+├── tests/                     # pytest (29 tests)
+└── .github/workflows/scan.yml # el cron de producción
 ```
+
+## Uso responsable
+
+Scraping de precios públicos para uso personal, con ritmo moderado (~15 min)
+y vía APIs/SSR que las propias tiendas sirven. Revisa los Términos de
+Servicio de cada tienda y no redistribuyas los datos comercialmente.
