@@ -146,14 +146,20 @@ Corrección importante de la Fase 2 original: la protección no es Akamai, es
   igual porque (a) sirve en local, (b) queda listo para un futuro VPS, y (c) el
   diseño se reutiliza en el dashboard estático de Pages (tarea #12).
 
-## Fase 4 — Validación end-to-end local (tarea #10)
+## Fase 4 — Validación end-to-end local (tarea #10) ✅ COMPLETA (2026-07-19)
 
-1. `main.py --once` con ≥1 tienda VTEX → DB acumula productos e historial.
-2. Forzar oferta (bajar `min_score` o insertar precio alto previo) → llega alerta
-   real a Telegram/Discord.
-3. Dashboard en localhost:8000 muestra la oferta.
-4. Segunda pasada → `was_alert_sent_recently` evita spam.
-5. Modernizar `web/app.py`: `@app.on_event` → lifespan.
+Validado con webhook de Discord real del usuario, sin datos simulados:
+1. `main.py --once` con las 4 tiendas → 497 productos reales, 15 ofertas
+   detectadas por el deal_engine (regla de combinación de F2 en acción).
+2. **15/15 notificaciones a Discord confirmadas** (HTTP 204 en cada POST +
+   confirmación visual del usuario en su canal).
+3. Segunda pasada inmediata → **0 notificaciones, 0 líneas "OFERTA:"** —
+   `was_alert_sent_recently` bloquea el spam correctamente.
+4. Corrida completa (scraping de 4 tiendas + evaluación + 15 notificaciones
+   reales) en ~20s.
+
+Pendiente (menor, no bloqueante): dashboard en localhost:8000 y modernizar
+`web/app.py` (`@app.on_event` → lifespan) — se hará junto con F3.
 
 ---
 
@@ -189,14 +195,14 @@ Corrección importante de la Fase 2 original: la protección no es Akamai, es
 7. (Tarea #12, opcional) Generar dashboard estático desde `recent_deals()` y
    publicar a GitHub Pages.
 
-**Pendiente para activarlo (requiere al usuario, no soy yo quien puede hacerlo):**
-- Convertir el directorio en repo git y subirlo a GitHub (el proyecto no es
-  un repo git todavía).
-- Crear el webhook de Discord y guardarlo como `DISCORD_WEBHOOK_URL` en
-  GitHub Secrets (Settings → Secrets and variables → Actions).
-- Correr el primer `workflow_dispatch` manual y revisar el log — ahí se
-  confirma si Cloudflare bloquea las IPs de los runners para Ripley/Falabella
-  (ver riesgo documentado arriba).
+**Estado del deploy (2026-07-19):**
+- ✅ Repo creado y publicado: https://github.com/BrucceVT/deal-tracker-peru
+  (público, con `gh repo create`, primer commit pusheado a `master`).
+- ⬜ Falta: crear el webhook de Discord y guardarlo como `DISCORD_WEBHOOK_URL`
+  en GitHub Secrets (Settings → Secrets and variables → Actions).
+- ⬜ Falta: correr el primer `workflow_dispatch` manual y revisar el log —
+  ahí se confirma si Cloudflare bloquea las IPs de los runners para
+  Ripley/Falabella (ver riesgo documentado arriba).
 
 ### Si GitHub Actions no alcanza (plan B documentado, no activo)
 Oracle Cloud Free Tier (VM gratis 24/7), o Raspberry Pi, o VPS ~$4/mes. El modo

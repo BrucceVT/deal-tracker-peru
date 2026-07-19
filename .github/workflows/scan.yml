@@ -5,7 +5,7 @@ on:
     # Cada 15 min en minutos desfasados (nunca :00/:30 -> menos retraso en
     # horas pico; GitHub Actions cron es best-effort, mínimo real 5 min).
     - cron: "7,22,37,52 * * * *"
-  workflow_dispatch: {} # permite correrlo manualmente desde la pestaña Actions
+  workflow_dispatch: # permite correrlo manualmente desde la pestaña Actions
 
 concurrency:
   group: deal-tracker-scan
