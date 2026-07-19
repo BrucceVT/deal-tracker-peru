@@ -143,17 +143,22 @@ Corrección importante de la Fase 2 original: la protección no es Akamai, es
 
 ---
 
-## Fase 3 — Frontend PWA (tareas #8-#9)
+## Fase 3 — Frontend PWA (tareas #8-#9) ✅ COMPLETA (2026-07-19)
 
-- `index.html`: fetch `/api/deals` → render de tarjetas; botón push → permiso +
-  registro SW + suscripción VAPID + POST `/api/push/subscribe`; auto-refresh.
-- `sw.js`: handler `push` (showNotification con payload {title, body, url}),
-  `notificationclick` (abrir URL), caché offline del shell.
-- `notifiers/webpush.py`: `webpush()` es síncrono y bloquea el event loop →
-  `asyncio.to_thread`; borrar suscripciones caducadas en vez de ignorarlas.
-- Contexto: con hosting GitHub Actions este frontend **no corre 24/7**. Se completa
-  igual porque (a) sirve en local, (b) queda listo para un futuro VPS, y (c) el
-  diseño se reutiliza en el dashboard estático de Pages (tarea #12).
+Sorpresa del análisis: `index.html` y los handlers push/notificationclick de
+`sw.js` ya estaban completos (el análisis inicial los daba por incompletos).
+Lo que realmente faltaba, hecho y probado:
+- `sw.js`: caché offline del shell (network-first con fallback a caché;
+  `/api/*` siempre va a red) + limpieza de cachés viejos en activate.
+- `notifiers/webpush.py`: `webpush()` síncrono → `asyncio.to_thread` (no
+  bloquear el event loop); suscripciones caducadas (404/410) se borran de la
+  DB vía la nueva `storage.delete_push_subscription()`.
+- `web/app.py`: `@app.on_event("startup")` deprecado → lifespan.
+- **Probado en vivo con uvicorn + browser**: render de ofertas, auto-refresh
+  (segunda llamada a /api/deals confirmada en logs), 0 errores de consola.
+  `.claude/launch.json` creado para levantar el dashboard con preview.
+- El flujo completo de push queda sin probar end-to-end (requiere llaves
+  VAPID + HTTPS + servidor persistente = futuro VPS); el código está listo.
 
 ## Fase 4 — Validación end-to-end local (tarea #10) ✅ COMPLETA (2026-07-19)
 
@@ -243,6 +248,19 @@ devolvió `429 Too Many Requests` en 1 de 15 notificaciones (rate limit del
 webhook ante ráfaga de alertas simultáneas). `notifiers/discord.py` ahora
 reintenta una vez respetando el `Retry-After` de Discord. Cubierto por 3
 tests nuevos (`tests/test_discord_notifier.py`).
+
+### Dashboard estático en GitHub Pages (tarea #12) ✅ COMPLETA (2026-07-19)
+- `scripts/generate_static_dashboard.py`: HTML autocontenido desde
+  `recent_deals()` (mismo diseño oscuro, hora de Lima, estado vacío explicando
+  la filosofía de errores de precio).
+- `scan.yml`: tras persistir la DB, genera `site/index.html` y lo publica con
+  `upload-pages-artifact` + `deploy-pages` (job separado, patrón oficial).
+- Pages habilitado en modo workflow vía `gh api`.
+- **En vivo y verificado: https://bruccevt.github.io/deal-tracker-peru/**
+  (se regenera en cada escaneo, cada ~15 min).
+- Nota: las 15 alertas visibles al inicio son historial de la calibración
+  antigua (pre-recalibración de errores de precio); las nuevas entradas solo
+  serán errores genuinos.
 
 ### Si GitHub Actions no alcanza (plan B documentado, no activo)
 Oracle Cloud Free Tier (VM gratis 24/7), o Raspberry Pi, o VPS ~$4/mes. El modo

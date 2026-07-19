@@ -28,8 +28,9 @@ Scrapea precios → evalúa con motor de señales → alerta por Discord/Telegra
 | `scrapers/{plazavea,oechsle}.py` | Subclases de 3 líneas de `VtexApiScraper` | — |
 | **Nota general scrapers** | 3 de 4 tiendas (Falabella + las 2 VTEX) NO usan Playwright | Solo Ripley necesita browser real — gran ahorro de minutos en CI |
 | `notifiers/{discord,telegram,webpush}.py` | Envío de alertas | Completos; webpush bloquea event loop (tarea #9) |
-| `web/app.py` | FastAPI: dashboard + API + push subscribe | `on_event` deprecado (tarea #10) |
-| `web/static/` | PWA: index.html, sw.js, manifest | JS del dashboard y sw.js incompletos (tareas #8, #9) |
+| `web/app.py` | FastAPI: dashboard + API + push subscribe | Usa lifespan. Solo corre en local (`/dashboard` de launch.json) o futuro VPS |
+| `web/static/` | PWA completa: index.html (render + push), sw.js (push + offline), manifest | Probada en vivo. El push end-to-end requiere VAPID + HTTPS (futuro VPS) |
+| `scripts/generate_static_dashboard.py` | Dashboard HTML autocontenido desde la DB | Publicado por CI en https://bruccevt.github.io/deal-tracker-peru/ cada escaneo |
 
 ## Decisiones tomadas (no re-discutir)
 
