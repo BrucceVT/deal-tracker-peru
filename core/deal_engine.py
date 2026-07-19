@@ -5,16 +5,19 @@ Combina varias señales en un score. Si el score >= min_score,
 el producto se considera una "oferta real" y se dispara alerta.
 
 Señales:
-  1. discount_pct_high     -> % de descuento (precio tachado vs precio actual) es grande
-  2. below_price_ceiling   -> precio absoluto cae dentro del rango [floor, ceiling] de su categoría
-  3. below_historical_min  -> es el precio más bajo jamás visto para ese producto
-  4. below_historical_avg  -> está X% bajo el promedio histórico del producto
+  1. discount_pct_high     -> % de descuento (precio tachado vs precio actual) es DRÁSTICO (>=80% por config)
+  2. below_price_ceiling   -> precio cae en el rango de "error de precio" [floor, ceiling] de su categoría
+  3. below_historical_min  -> es el precio más bajo jamás visto para ese producto (refuerzo)
+  4. below_historical_avg  -> caída drástica (>=60% por config) bajo el promedio histórico propio
 
-Regla de combinación: below_price_ceiling NUNCA dispara una oferta ella sola,
-tiene que venir acompañada de al menos otra señal. Motivo (encontrado
-validando en vivo el 2026-07-19): muchos productos de gama baja viven
-SIEMPRE dentro del rango floor/ceiling de su categoría sin que eso sea un
-error de precio — es simplemente su precio normal de lista.
+FILOSOFÍA (recalibrado 2026-07-19 a pedido del usuario): el objetivo son
+ERRORES DE PRECIO (ej. laptop buena a S/475), no descuentos comunes de
+30-40%. Los umbrales viven en config.yaml. Con los rangos floor/ceiling
+apretados a nivel de error (ceiling < precio mínimo normal de mercado de la
+categoría), la señal de rango puede disparar ELLA SOLA — importante porque
+en un error de precio la tienda muchas veces ni muestra precio tachado.
+El ruido de productos baratos legítimos se controla con exclude_keywords
+(accesorios, reacondicionados, chromebooks) y el floor.
 """
 import re
 from dataclasses import dataclass, field
@@ -62,30 +65,28 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
 
     score = 0.0
     reasons = []
-    signals_fired = []  # nombres de las señales que se activaron, para la regla de combinación
 
-    # Señal 1: descuento vs precio original mostrado por la tienda
+    # Señal 1: descuento drástico vs precio original mostrado por la tienda
     if original_price and original_price > current_price > 0:
         discount_pct = (1 - current_price / original_price) * 100
         if discount_pct >= discount_threshold:
             score += weights["discount_pct_high"]
             reasons.append(f"Descuento de {discount_pct:.0f}% vs precio de lista")
-            signals_fired.append("discount_pct_high")
 
-    # Señal 2: precio absoluto dentro del rango [floor, ceiling] de la categoría.
-    # El floor evita que un precio absurdamente bajo (accesorio mal filtrado)
-    # se confunda con un "error de precio" real del producto. Esta señal NO
-    # puede disparar una oferta ella sola (ver regla de combinación más abajo):
-    # muchos productos de gama baja viven permanentemente dentro del rango sin
-    # que eso sea un error de precio, solo su precio normal de lista.
+    # Señal 2: precio dentro del rango de "error de precio" de la categoría.
+    # El ceiling está calibrado POR DEBAJO del precio mínimo normal de mercado
+    # (ver config.yaml), así que caer en el rango es señal fuerte por sí sola.
+    # El floor evita que un accesorio mal filtrado pase por producto real.
     category, bounds = _match_category(product_title, cfg["price_ceiling"])
     if bounds:
         floor = bounds.get("floor", 0)
         ceiling = bounds["ceiling"]
         if floor <= current_price <= ceiling:
             score += weights["below_price_ceiling"]
-            reasons.append(f"Precio S/{current_price:.0f} en rango de '{category}' (S/{floor}-{ceiling})")
-            signals_fired.append("below_price_ceiling")
+            reasons.append(
+                f"Posible error de precio: S/{current_price:.0f} para '{category}' "
+                f"(rango de error: S/{floor}-{ceiling})"
+            )
 
     # Señal 3 y 4: comparación con historial de precios de ESTE producto
     historical_prices = [p for p, _ in price_history if p]
@@ -96,24 +97,11 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
         if current_price < hist_min:
             score += weights["below_historical_min"]
             reasons.append(f"Precio más bajo histórico registrado (antes S/{hist_min:.0f})")
-            signals_fired.append("below_historical_min")
 
         if hist_avg > 0:
             avg_drop_pct = (1 - current_price / hist_avg) * 100
             if avg_drop_pct >= avg_threshold:
                 score += weights["below_historical_avg_pct"]
                 reasons.append(f"{avg_drop_pct:.0f}% bajo el precio promedio histórico")
-                signals_fired.append("below_historical_avg_pct")
 
-    # Regla de combinación: "rango de precio" sola no basta para alertar.
-    # Sin esto, cualquier producto barato que viva SIEMPRE dentro del rango
-    # (no un error de precio, solo su precio normal) dispararía alerta en
-    # cada primer escaneo, antes incluso de tener historial que lo confirme.
-    only_price_ceiling_fired = signals_fired == ["below_price_ceiling"]
-    if only_price_ceiling_fired:
-        is_deal = False
-        reasons.append("Precio en rango pero sin otra señal que lo confirme (esperando más historial)")
-    else:
-        is_deal = score >= min_score
-
-    return DealResult(is_deal=is_deal, score=round(score, 2), reasons=reasons)
+    return DealResult(is_deal=score >= min_score, score=round(score, 2), reasons=reasons)

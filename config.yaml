@@ -32,9 +32,13 @@ keywords:
   - disco duro
 
 # Palabras que, si aparecen en el título, EXCLUYEN el producto de todo el
-# análisis (accesorios que suelen ser mucho más baratos que el producto real
-# y calzan por texto dentro del price_ceiling: "mochila para laptop" a S/59
-# no debe alertar como "laptop barata").
+# análisis. Dos grupos:
+#   1. Accesorios mucho más baratos que el producto real que calzan por texto
+#      dentro del price_ceiling ("mochila para laptop" a S/59 no es una
+#      "laptop barata").
+#   2. Productos legítimamente baratos que NO son errores de precio:
+#      reacondicionados (S/899-1139 es su precio normal) y chromebooks
+#      (S/500-700 nuevos es normal).
 exclude_keywords:
   - mochila
   - funda
@@ -53,32 +57,45 @@ exclude_keywords:
   - parlante
   - repuesto
   - accesorio
+  - reacondicionado
+  - reacondicionada
+  - refurbished
+  - chromebook
 
-# Categorías con rango de precio propio (soles): floor..ceiling. Si un
-# producto de esa categoría cae DENTRO del rango, se marca como oferta
-# aunque el % de descuento no sea grande (para cazar "errores de precio").
-# El floor existe porque un precio absurdamente bajo para la categoría casi
-# siempre es un accesorio mal detectado, no el producto real (ej. una laptop
-# real no cuesta S/50 aunque "mochila laptop" sí).
+# Rango de "error de precio" por categoría (soles): floor..ceiling.
+# FILOSOFÍA (2026-07-19, pedido del usuario): esto NO es para descuentos
+# comunes — es para cazar errores tipo "laptop buena a S/475". Por eso el
+# ceiling está POR DEBAJO del precio mínimo normal de mercado del producto
+# nuevo más barato de la categoría (medido con datos reales de las 4 tiendas):
+#   laptop nueva más barata real  ~S/1,800  -> error si <= 900
+#   televisor más barato real     ~S/369    -> error si <= 300
+#   smartphone más barato real    ~S/329    -> error si <= 280
+#   tablet más barata real        ~S/300    -> error si <= 250
+# Un precio dentro de este rango ES un error casi seguro, así que la señal
+# puede disparar alerta ELLA SOLA (en errores de precio la tienda muchas
+# veces ni muestra precio tachado). El floor filtra accesorios mal detectados.
 price_ceiling:
-  laptop: {floor: 300, ceiling: 1200}
-  televisor: {floor: 300, ceiling: 900}
-  smartphone: {floor: 200, ceiling: 700}
-  tablet: {floor: 150, ceiling: 500}
-  monitor: {floor: 150, ceiling: 500}
+  laptop: {floor: 300, ceiling: 900}
+  televisor: {floor: 100, ceiling: 300}
+  smartphone: {floor: 100, ceiling: 280}
+  tablet: {floor: 80, ceiling: 250}
+  monitor: {floor: 80, ceiling: 250}
 
 # --- Motor de decisión: combinación de señales ---
 # Un producto se considera OFERTA si su score >= min_score.
 # score = suma ponderada de señales activadas (ver core/deal_engine.py)
+# Calibrado para ERRORES DE PRECIO, no ofertas comunes: cada una de las 3
+# señales fuertes (descuento >=80%, rango de error, caída histórica >=60%)
+# pesa 2.0 y puede disparar sola. below_historical_min es solo un refuerzo.
 deal_engine:
   min_score: 2.0
   weights:
-    discount_pct_high: 1.5      # descuento >= discount_pct_threshold
-    below_price_ceiling: 2.0    # precio absoluto por debajo del techo de la categoría
-    below_historical_min: 1.5   # precio más bajo que el mínimo histórico registrado
-    below_historical_avg_pct: 1.0  # % por debajo del promedio histórico
-  discount_pct_threshold: 35      # % mínimo de descuento para activar la señal
-  historical_avg_pct_threshold: 20  # % mínimo bajo el promedio histórico
+    discount_pct_high: 2.0      # descuento >= discount_pct_threshold (drástico)
+    below_price_ceiling: 2.0    # precio en el rango de "error" de su categoría
+    below_historical_min: 0.5   # refuerzo: es el precio más bajo jamás visto
+    below_historical_avg_pct: 2.0  # caída drástica vs promedio histórico propio
+  discount_pct_threshold: 80      # % mínimo de descuento (el usuario no quiere <80%)
+  historical_avg_pct_threshold: 60  # % mínimo de caída bajo el promedio histórico
 
 # --- Notificaciones ---
 notifications:

@@ -17,7 +17,7 @@ Scrapea precios → evalúa con motor de señales → alerta por Discord/Telegra
 |---|---|---|
 | `main.py` | Loop infinito o `--once`: scan → evaluate → notify | `seen_urls` por-pasada (fix #1). `--once` probado en vivo (tarea #7, completa) |
 | `config.yaml` | Tiendas, keywords, umbrales, pesos, notificaciones, `exclude_keywords` | Se recarga en caliente cada ciclo. `price_ceiling` ahora es `{floor, ceiling}` por categoría |
-| `core/deal_engine.py` | Score de 4 señales, `evaluate()` | Bugs #2 y #3 corregidos (2026-07-19): historial ya no incluye el precio actual, rango floor/ceiling + exclude_keywords + match por palabra completa |
+| `core/deal_engine.py` | Score de 4 señales, `evaluate()` | **Calibrado para ERRORES DE PRECIO, no descuentos comunes** (pedido del usuario 2026-07-19): descuento >=80%, rangos de error bajo el precio mínimo normal de mercado, caída histórica >=60%. Cada señal fuerte dispara sola. Reacondicionados y chromebooks excluidos |
 | `core/storage.py` | SQLite (`data/deals.db`): products, price_history, alerts_sent, push_subscriptions | `upsert_product_price` se dividió en `get_or_create_product` + `record_price_point` (fix #2). Dedupe de alertas con tolerancia de float (fix #4) |
 | `tests/` | 16 tests pytest (deal_engine + storage) | `python -m pytest tests/ -v` — protege los fixes de F1 |
 | `scrapers/types.py` | `ScrapedProduct`, `parse_price_pe()` — SIN Playwright | Separado a propósito para que scrapers API-only no carguen Chromium |
@@ -33,9 +33,17 @@ Scrapea precios → evalúa con motor de señales → alerta por Discord/Telegra
 
 ## Decisiones tomadas (no re-discutir)
 
-- **Hosting: GitHub Actions** (decisión del usuario). Cron cada 15 min en minutos desfasados (ej. `7,22,37,52`), modo `--once`, DB persistida en rama `data`, secretos en GitHub Secrets. Limitación aceptada: cron best-effort (retrasos 5-30 min), sin servidor persistente → **Discord es el canal principal** (decisión del usuario, 2026-07-19), Telegram queda como secundario/opcional, web push solo aplicaría en un futuro VPS.
-- **Plaza Vea y Oechsle**: usar API pública VTEX `GET {base}/api/catalog_system/pub/products/search/{cat}?_from=0&_to=49` (JSON, sin auth, sin Playwright) en vez de HTML.
-- **Riesgo a validar temprano**: IPs de GitHub runners pueden estar bloqueadas por Falabella/Ripley (Akamai). Probar run manual antes de invertir en esos scrapers.
+- **Hosting: GitHub Actions — EN PRODUCCIÓN desde 2026-07-19.** Repo:
+  https://github.com/BrucceVT/deal-tracker-peru (público). Cron cada 15 min
+  desfasado (`7,22,37,52`), modo `--once`, DB persistida en rama `data`,
+  `DISCORD_WEBHOOK_URL` en GitHub Secrets. **Discord es el canal principal**
+  (Telegram secundario/opcional, no configurado). El cron corre solo, no
+  requiere acción para seguir funcionando.
+- **Plaza Vea y Oechsle**: API pública VTEX `GET {base}/api/catalog_system/pub/products/search/{cat}?_from=0&_to=49`. Ojo: VTEX responde 206, no 200.
+- **Falabella**: parsea `__NEXT_DATA__` (SSR Next.js) con httpx puro, sin Playwright — confirmado funciona también desde runners de GitHub.
+- **Ripley**: SÍ necesita Playwright, y Cloudflare bloquea el browser headless desde la IP de datacenter de GitHub Actions (confirmado en el primer run real). Limitación conocida y aceptada: Ripley solo aporta ofertas cuando el tracker corre en local/VPS, no en CI. No es un bug — el error se captura y el resto del scan sigue normal.
+- **`.github/workflows/scan.yml`**: usar `workflow_dispatch:` **bare** (sin `{}`) — un `workflow_dispatch: {}` explícito hace que GitHub Actions NO indexe el workflow en absoluto (ni aparece en la lista, ni genera check-suites), sin ningún mensaje de error visible. Encontrado por eliminación con workflows mínimos de prueba el 2026-07-19.
+- **Discord**: reintenta una vez ante 429 (rate limit) respetando `Retry-After` — bug real visto en el primer run (ráfaga de 15 alertas simultáneas disparó el límite del webhook).
 
 ## Comandos
 

@@ -124,13 +124,22 @@ Corrección importante de la Fase 2 original: la protección no es Akamai, es
 - `python main.py --once`: escanea todas las tiendas activas en paralelo
   (`asyncio.gather`) y termina. Probado en vivo con Plaza Vea + Oechsle:
   399 productos, 27 alertas, corrida completa en ~9s, proceso terminó solo.
-- **Hallazgo de tuning, resuelto (2026-07-19)**: con floor/ceiling amplios,
-  ~27 de 399 productos activaban la señal "rango de precio" solas (score
-  exacto 2.0 = min_score) en su primer escaneo — precios normales de gama
-  baja, no errores de precio. **Decisión del usuario**: exigir combinación de
-  ≥2 señales. Implementado en `deal_engine.py`: `below_price_ceiling` nunca
-  dispara sola (regla `only_price_ceiling_fired`), necesita descuento fuerte
-  o una caída histórica además. Cubierto por 2 tests nuevos.
+- **Hallazgo de tuning, iterado dos veces (2026-07-19)**:
+  - Iteración 1: con floor/ceiling amplios, ~27/399 productos alertaban solo
+    por rango de precio → se exigió combinación de ≥2 señales. Aun así, en
+    producción salieron 15 alertas de TVs/tablets de gama baja con descuentos
+    comunes de 30-40% (rango + descuento ≥35% = 3.5).
+  - Iteración 2 (RECALIBRACIÓN FINAL, pedido explícito del usuario): el
+    objetivo son **errores de precio** tipo "laptop buena a S/475", no
+    descuentos comunes. Cambios: descuento mínimo 35%→**80%**, caída
+    histórica 20%→**60%**, rangos apretados a nivel de error (ceiling POR
+    DEBAJO del precio mínimo normal de mercado medido con datos reales:
+    laptop 900, TV 300, smartphone 280, tablet 250), reacondicionados y
+    chromebooks excluidos (baratos legítimos), y la señal de rango vuelve a
+    disparar SOLA (en errores de precio a veces no hay tachado) — se eliminó
+    la regla de combinación de la iteración 1. Validado en vivo: **0 alertas
+    en 697 productos reales** (antes 15 falsas), y el caso S/475 cubierto por
+    test. 29 tests pasando.
 
 ---
 
@@ -195,14 +204,45 @@ Pendiente (menor, no bloqueante): dashboard en localhost:8000 y modernizar
 7. (Tarea #12, opcional) Generar dashboard estático desde `recent_deals()` y
    publicar a GitHub Pages.
 
-**Estado del deploy (2026-07-19):**
-- ✅ Repo creado y publicado: https://github.com/BrucceVT/deal-tracker-peru
-  (público, con `gh repo create`, primer commit pusheado a `master`).
-- ⬜ Falta: crear el webhook de Discord y guardarlo como `DISCORD_WEBHOOK_URL`
-  en GitHub Secrets (Settings → Secrets and variables → Actions).
-- ⬜ Falta: correr el primer `workflow_dispatch` manual y revisar el log —
-  ahí se confirma si Cloudflare bloquea las IPs de los runners para
-  Ripley/Falabella (ver riesgo documentado arriba).
+**Estado del deploy: EN PRODUCCIÓN (2026-07-19).**
+- ✅ Repo publicado: https://github.com/BrucceVT/deal-tracker-peru (público).
+- ✅ `DISCORD_WEBHOOK_URL` configurado en GitHub Secrets (webhook real del usuario).
+- ✅ Primer `workflow_dispatch` manual corrido con éxito (run
+  [29704597030](https://github.com/BrucceVT/deal-tracker-peru/actions/runs/29704597030),
+  1m41s) — **15 notificaciones reales llegaron al Discord del usuario**,
+  confirmadas visualmente.
+- ✅ Rama `data` creada automáticamente, `data/deals.db` persistido (192 KB).
+- ✅ **El cron ya está activo**: corre solo cada 15 min (`7,22,37,52 * * * *`)
+  desde que el workflow quedó registrado — no requiere más acción para seguir
+  funcionando.
+
+**Bug de registro del workflow, encontrado y corregido:** GitHub Actions no
+indexaba `scan.yml` en absoluto (ni un check-suite se generaba, 404 al
+intentar dispatch). Diagnosticado por eliminación con 3 workflows mínimos de
+prueba: la causa era `workflow_dispatch: {}` (mapping vacío explícito) en vez
+de la forma bare `workflow_dispatch:`. Ambos son YAML válido, pero GitHub
+solo indexa la segunda forma. Corregido y confirmado.
+
+**Riesgo de Cloudflare, confirmado con datos reales del primer run:**
+| Tienda | Resultado desde el runner de GitHub | 
+|---|---|
+| Falabella | ✅ 98 + 141 productos — Cloudflare NO bloquea el GET plano |
+| Plaza Vea | ✅ 200 productos — API VTEX sin problema |
+| Oechsle | ✅ 200 productos — API VTEX sin problema |
+| Ripley | ❌ Timeout esperando el selector — Cloudflare bloquea el browser headless desde la IP de datacenter del runner |
+
+El fallo de Ripley no rompe el run (capturado por el try/except de
+`scan_store`, main.py sigue con las demás tiendas y termina bien). **Ripley
+queda como limitación conocida en producción**: solo trae ofertas cuando el
+tracker corre en local/VPS (IP residencial), no desde GitHub Actions. No se
+invirtió en workarounds (proxy residencial, etc.) — fuera de alcance por
+ahora, documentado para revisitar si se vuelve prioritario.
+
+**Bug adicional encontrado y corregido en el primer run real:** Discord
+devolvió `429 Too Many Requests` en 1 de 15 notificaciones (rate limit del
+webhook ante ráfaga de alertas simultáneas). `notifiers/discord.py` ahora
+reintenta una vez respetando el `Retry-After` de Discord. Cubierto por 3
+tests nuevos (`tests/test_discord_notifier.py`).
 
 ### Si GitHub Actions no alcanza (plan B documentado, no activo)
 Oracle Cloud Free Tier (VM gratis 24/7), o Raspberry Pi, o VPS ~$4/mes. El modo
