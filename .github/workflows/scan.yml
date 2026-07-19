@@ -1,0 +1,85 @@
+name: Deal Tracker Scan
+
+on:
+  schedule:
+    # Cada 15 min en minutos desfasados (nunca :00/:30 -> menos retraso en
+    # horas pico; GitHub Actions cron es best-effort, mínimo real 5 min).
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch: {} # permite correrlo manualmente desde la pestaña Actions
+
+concurrency:
+  group: deal-tracker-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: write # necesario para commitear data/deals.db a la rama `data`
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install Playwright Chromium
+        # Solo Ripley necesita browser real (Falabella y las tiendas VTEX
+        # usan APIs/SSR directo, ver scrapers/). El --with-deps solo hace
+        # falta la primera vez; con caché esto es casi instantáneo.
+        run: python -m playwright install --with-deps chromium
+
+      - name: Restore database from data branch
+        run: |
+          mkdir -p data
+          git fetch origin data 2>/dev/null || true
+          git show origin/data:data/deals.db > data/deals.db 2>/dev/null \
+            && echo "DB previa restaurada" \
+            || echo "Sin DB previa, se creará una nueva"
+
+      - name: Run scan
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py --once
+
+      - name: Persist database to data branch
+        run: |
+          git config user.name "deal-tracker-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin data > /dev/null 2>&1; then
+            git fetch origin data:data
+            git worktree add data-branch data
+          else
+            git worktree add --detach data-branch
+            (cd data-branch && git checkout --orphan data && git rm -rf . -q)
+          fi
+
+          mkdir -p data-branch/data
+          cp data/deals.db data-branch/data/deals.db
+
+          cd data-branch
+          git add data/deals.db
+          if git diff --cached --quiet; then
+            echo "Sin cambios en la base de datos, no se hace commit"
+          else
+            git commit -m "Actualiza deals.db [skip ci]"
+            git push origin data
+          fi

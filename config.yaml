@@ -1,0 +1,125 @@
+# ============================================================
+# Configuración del Deal Tracker
+# ============================================================
+
+# Cada cuánto se revisa cada tienda (segundos).
+# NO poner valores muy bajos (<20s) o te van a bloquear la IP.
+scan_interval:
+  falabella: 45
+  ripley: 45
+  plazavea: 60
+  oechsle: 60
+  linio: 90
+
+# Palabras clave que definen "sector tecnología" (para filtrar productos)
+keywords:
+  - laptop
+  - notebook
+  - computadora
+  - pc gamer
+  - all in one
+  - monitor
+  - televisor
+  - smart tv
+  - teléfono
+  - smartphone
+  - celular
+  - tablet
+  - audífonos
+  - tarjeta gráfica
+  - procesador
+  - ssd
+  - disco duro
+
+# Palabras que, si aparecen en el título, EXCLUYEN el producto de todo el
+# análisis (accesorios que suelen ser mucho más baratos que el producto real
+# y calzan por texto dentro del price_ceiling: "mochila para laptop" a S/59
+# no debe alertar como "laptop barata").
+exclude_keywords:
+  - mochila
+  - funda
+  - case
+  - forro
+  - protector
+  - cooler
+  - cooler pad
+  - base para laptop
+  - cargador
+  - cable
+  - adaptador
+  - soporte
+  - teclado
+  - mouse
+  - parlante
+  - repuesto
+  - accesorio
+
+# Categorías con rango de precio propio (soles): floor..ceiling. Si un
+# producto de esa categoría cae DENTRO del rango, se marca como oferta
+# aunque el % de descuento no sea grande (para cazar "errores de precio").
+# El floor existe porque un precio absurdamente bajo para la categoría casi
+# siempre es un accesorio mal detectado, no el producto real (ej. una laptop
+# real no cuesta S/50 aunque "mochila laptop" sí).
+price_ceiling:
+  laptop: {floor: 300, ceiling: 1200}
+  televisor: {floor: 300, ceiling: 900}
+  smartphone: {floor: 200, ceiling: 700}
+  tablet: {floor: 150, ceiling: 500}
+  monitor: {floor: 150, ceiling: 500}
+
+# --- Motor de decisión: combinación de señales ---
+# Un producto se considera OFERTA si su score >= min_score.
+# score = suma ponderada de señales activadas (ver core/deal_engine.py)
+deal_engine:
+  min_score: 2.0
+  weights:
+    discount_pct_high: 1.5      # descuento >= discount_pct_threshold
+    below_price_ceiling: 2.0    # precio absoluto por debajo del techo de la categoría
+    below_historical_min: 1.5   # precio más bajo que el mínimo histórico registrado
+    below_historical_avg_pct: 1.0  # % por debajo del promedio histórico
+  discount_pct_threshold: 35      # % mínimo de descuento para activar la señal
+  historical_avg_pct_threshold: 20  # % mínimo bajo el promedio histórico
+
+# --- Notificaciones ---
+notifications:
+  discord:
+    enabled: true
+    webhook_url: "https://discord.com/api/webhooks/TU_WEBHOOK_AQUI"
+  telegram:
+    enabled: true
+    bot_token: "TU_BOT_TOKEN_AQUI"
+    chat_id: "TU_CHAT_ID_AQUI"
+  webpush:
+    enabled: true
+    vapid_public_key: ""   # generado con scripts/generate_vapid_keys.py
+    vapid_private_key: ""
+    vapid_claims_email: "mailto:tu_correo@example.com"
+
+# --- Tiendas activas ---
+stores:
+  falabella:
+    enabled: true
+    base_url: "https://www.falabella.com.pe"
+    categories:
+      - "https://www.falabella.com.pe/falabella-pe/category/cat40712/Laptops"
+      - "https://www.falabella.com.pe/falabella-pe/category/cat50678/Computadoras"
+  ripley:
+    enabled: true
+    base_url: "https://simple.ripley.com.pe"
+    categories:
+      # "computo" ya no existe (devolvía 404) -> corregido a "computacion" (2026-07-19)
+      - "https://simple.ripley.com.pe/tecnologia/computacion/laptops"
+  plazavea:
+    enabled: true
+    base_url: "https://www.plazavea.com.pe"
+    categories:
+      - "https://www.plazavea.com.pe/tecnologia/computo"
+  oechsle:
+    enabled: true
+    base_url: "https://www.oechsle.pe"
+    categories:
+      - "https://www.oechsle.pe/tecnologia"
+  linio:
+    enabled: false
+    base_url: "https://www.linio.com.pe"
+    categories: []

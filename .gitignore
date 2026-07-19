@@ -1,0 +1,23 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Base de datos local (en producción vive en la rama `data`, no en main)
+data/
+
+# Playwright
+node_modules/
+
+# Config con secretos reales (config.yaml del repo debe llevar solo placeholders)
+.env
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
