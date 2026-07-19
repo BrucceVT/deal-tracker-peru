@@ -11,6 +11,7 @@ Sirve:
   - GET  /api/vapid-public-key -> llave pública para el frontend
 """
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import yaml
@@ -20,7 +21,14 @@ from fastapi.staticfiles import StaticFiles
 
 from core import storage
 
-app = FastAPI(title="Deal Tracker")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    storage.init_db()
+    yield
+
+
+app = FastAPI(title="Deal Tracker", lifespan=lifespan)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -29,11 +37,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 def load_config():
     with open("config.yaml", "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
-
-
-@app.on_event("startup")
-def startup():
-    storage.init_db()
 
 
 @app.get("/")

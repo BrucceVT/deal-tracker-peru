@@ -1,8 +1,12 @@
+import asyncio
 import json
+import logging
 
 from pywebpush import WebPushException, webpush
 
-from core.storage import all_push_subscriptions
+from core.storage import all_push_subscriptions, delete_push_subscription
+
+log = logging.getLogger("deal-tracker")
 
 
 async def send_webpush_alert(cfg: dict, product, deal_result):
@@ -21,12 +25,22 @@ async def send_webpush_alert(cfg: dict, product, deal_result):
     for sub_json in all_push_subscriptions():
         subscription_info = json.loads(sub_json)
         try:
-            webpush(
+            # webpush() es síncrono (hace HTTP con requests por dentro):
+            # ejecutarlo directo bloquearía el event loop y con él los
+            # escaneos concurrentes de las demás tiendas.
+            await asyncio.to_thread(
+                webpush,
                 subscription_info=subscription_info,
                 data=payload,
                 vapid_private_key=settings["vapid_private_key"],
                 vapid_claims={"sub": settings["vapid_claims_email"]},
             )
-        except WebPushException:
-            # suscripción caducada/revocada; se podría limpiar de la DB aquí
-            continue
+        except WebPushException as exc:
+            # 404/410 = suscripción caducada o revocada por el navegador:
+            # se elimina de la DB para no reintentar contra ella por siempre.
+            status = getattr(exc.response, "status_code", None)
+            if status in (404, 410):
+                delete_push_subscription(subscription_info.get("endpoint", ""))
+                log.info("Suscripción push caducada eliminada (%s)", status)
+            else:
+                log.warning("Error enviando web push: %s", exc)

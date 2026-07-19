@@ -10,6 +10,9 @@ __pycache__/
 # Base de datos local (en producción vive en la rama `data`, no en main)
 data/
 
+# Dashboard estático generado (se construye en CI, no se commitea)
+site/
+
 # Playwright
 node_modules/
 

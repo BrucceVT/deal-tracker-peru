@@ -83,3 +83,28 @@ jobs:
             git commit -m "Actualiza deals.db [skip ci]"
             git push origin data
           fi
+
+      - name: Generate static dashboard
+        run: python scripts/generate_static_dashboard.py site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  # Job separado (patrón oficial de deploy-pages): publica el dashboard
+  # estático generado por el scan en la URL de GitHub Pages del repo.
+  deploy-pages:
+    needs: scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

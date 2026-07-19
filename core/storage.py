@@ -172,3 +172,9 @@ def all_push_subscriptions():
     with get_conn() as conn:
         rows = conn.execute("SELECT subscription_json FROM push_subscriptions").fetchall()
         return [r["subscription_json"] for r in rows]
+
+
+def delete_push_subscription(endpoint):
+    """Elimina una suscripción caducada/revocada (el push service devolvió 404/410)."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
