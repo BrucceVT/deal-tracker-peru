@@ -25,8 +25,8 @@ Scrapea precios → evalúa con motor de señales → alerta por Discord/Telegra
 | `scrapers/falabella.py` | Parsea `__NEXT_DATA__` (SSR de Next.js) con httpx puro, SIN Playwright | Cloudflare deja pasar el GET plano. Paginación `?page=N`. Ya no usa selectores CSS |
 | `scrapers/ripley.py` | Playwright (Cloudflare bloquea GET plano, 403 confirmado) + parsea `__NEXT_DATA__.findabilityProps` | URL real del producto se empareja por `pos=N` del DOM, no viene en el JSON |
 | `scrapers/vtex_api.py` | `VtexApiScraper`: API JSON pública de VTEX (httpx, sin Playwright) | VTEX responde **206**, no 200, al paginar — ya corregido |
-| `scrapers/{plazavea,oechsle}.py` | Subclases de 3 líneas de `VtexApiScraper` | — |
-| **Nota general scrapers** | 3 de 4 tiendas (Falabella + las 2 VTEX) NO usan Playwright | Solo Ripley necesita browser real — gran ahorro de minutos en CI |
+| `scrapers/{plazavea,oechsle,coolbox,promart,metro,wong}.py` | Subclases de 3 líneas de `VtexApiScraper` | Wong deshabilitada en config (catálogo duplicado con Metro, ambos Cencosud) |
+| **Nota general scrapers** | 7 de 8 tiendas NO usan Playwright (Falabella SSR + 6 VTEX) | Solo Ripley necesita browser real. ~2,300 productos/escaneo desde F6 |
 | `notifiers/{discord,telegram,webpush}.py` | Envío de alertas | Completos; webpush bloquea event loop (tarea #9) |
 | `web/app.py` | FastAPI: dashboard + API + push subscribe | Usa lifespan. Solo corre en local (`/dashboard` de launch.json) o futuro VPS |
 | `web/static/` | PWA completa: index.html (render + push), sw.js (push + offline), manifest | Probada en vivo. El push end-to-end requiere VAPID + HTTPS (futuro VPS) |
@@ -45,6 +45,8 @@ Scrapea precios → evalúa con motor de señales → alerta por Discord/Telegra
 - **Ripley**: SÍ necesita Playwright, y Cloudflare bloquea el browser headless desde la IP de datacenter de GitHub Actions (confirmado en el primer run real). Limitación conocida y aceptada: Ripley solo aporta ofertas cuando el tracker corre en local/VPS, no en CI. No es un bug — el error se captura y el resto del scan sigue normal.
 - **`.github/workflows/scan.yml`**: usar `workflow_dispatch:` **bare** (sin `{}`) — un `workflow_dispatch: {}` explícito hace que GitHub Actions NO indexe el workflow en absoluto (ni aparece en la lista, ni genera check-suites), sin ningún mensaje de error visible. Encontrado por eliminación con workflows mínimos de prueba el 2026-07-19.
 - **Discord**: reintenta una vez ante 429 (rate limit) respetando `Retry-After` — bug real visto en el primer run (ráfaga de 15 alertas simultáneas disparó el límite del webhook).
+- **Calibración anti-ruido (F6, no revertir)**: "tablet" NO tiene rango de error (tablets kids/genéricas son legítimas a cualquier precio); el descuento tachado pesa 1.5 y NO dispara solo (vendedores de marketplace inflan el precio de lista — caso real "Redmi Pad 2 antes S/4,600"); exclude_keywords incluye kids/niños/básico. Anclas que sí disparan solas: rango de error y caída histórica ≥60%.
+- **Tiendas descartadas en el sondeo F6**: Hiraoka (no VTEX), Tottus (503), Sodimac (0 resultados), Linio (muerta). No re-sondear sin motivo.
 
 ## Comandos
 

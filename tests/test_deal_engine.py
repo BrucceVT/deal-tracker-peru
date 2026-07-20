@@ -19,12 +19,16 @@ from core.deal_engine import evaluate
 
 @pytest.fixture
 def base_cfg():
-    # Refleja la calibración real de config.yaml post-2026-07-19.
+    # Refleja la calibración real de config.yaml post-2026-07-19:
+    # anclas (rango de error, caída histórica) pesan 2.0 y disparan solas;
+    # refuerzos (descuento tachado 1.5, mínimo histórico 0.5) no.
+    # "tablet" no tiene rango a propósito (kids/gama ultra-baja son legítimas
+    # a cualquier precio).
     return {
         "deal_engine": {
             "min_score": 2.0,
             "weights": {
-                "discount_pct_high": 2.0,
+                "discount_pct_high": 1.5,
                 "below_price_ceiling": 2.0,
                 "below_historical_min": 0.5,
                 "below_historical_avg_pct": 2.0,
@@ -35,10 +39,10 @@ def base_cfg():
         "exclude_keywords": [
             "mochila", "funda", "case", "cooler", "cargador", "cable", "soporte",
             "reacondicionado", "reacondicionada", "refurbished", "chromebook",
+            "kids", "niños", "básico", "basico",
         ],
         "price_ceiling": {
             "laptop": {"floor": 300, "ceiling": 900},
-            "tablet": {"floor": 80, "ceiling": 250},
             "televisor": {"floor": 100, "ceiling": 300},
         },
     }
@@ -58,11 +62,21 @@ def test_common_discount_is_ignored(base_cfg):
     assert result.is_deal is False
 
 
-def test_drastic_discount_alerts_alone(base_cfg):
-    # 85% de descuento tachado -> error de precio o liquidación drástica.
-    result = evaluate("Monitor Samsung 24 pulgadas", 150, 1000, [], base_cfg)
+def test_drastic_discount_alone_is_not_enough(base_cfg):
+    # Caso real (2026-07-19): "Redmi Pad 2 a S/919, antes S/4,600" — un
+    # vendedor de marketplace infla el precio de lista para fingir 80% de
+    # descuento. El descuento tachado es falsificable, así que solo NO basta.
+    result = evaluate("Tablet Xiaomi Redmi Pad 2 256GB", 919, 4600, [], base_cfg)
+    assert result.is_deal is False
+    assert result.score == 1.5
+
+
+def test_drastic_discount_plus_error_range_alerts(base_cfg):
+    # Descuento drástico Y precio en el rango de error de la categoría:
+    # ambas señales coinciden -> error casi seguro.
+    result = evaluate("Laptop HP Pavilion 15 i7", 475, 3000, [], base_cfg)
     assert result.is_deal is True
-    assert any("Descuento de 85%" in r for r in result.reasons)
+    assert result.score == 3.5
 
 
 def test_price_error_range_alerts_alone(base_cfg):
@@ -160,5 +174,21 @@ def test_combined_signals_sum_score(base_cfg):
     history = [(2800.0, 100), (2900.0, 90)]
     result = evaluate("Laptop HP Pavilion 15 i7", 475, 2900, history, base_cfg)
     assert result.is_deal is True
-    assert result.score == 6.5  # 2.0 + 2.0 + 0.5 + 2.0
+    assert result.score == 6.0  # 1.5 + 2.0 + 0.5 + 2.0
     assert len(result.reasons) == 4
+
+
+def test_kids_tablet_is_excluded(base_cfg):
+    # Caso real (2026-07-19): "Tablet Advance KIDs 7 a S/99" — precio normal
+    # de una tablet infantil, no un error.
+    result = evaluate('Tablet Advance KIDs 7" 3G Dual SIM 2GB 32GB', 99, None, [], base_cfg)
+    assert result.is_deal is False
+    assert "Excluido" in result.reasons[0]
+
+
+def test_cheap_generic_tablet_no_longer_alerts(base_cfg):
+    # "tablet" ya no tiene rango de error: tablets genéricas ultra-baratas
+    # (S/225 la CLIQ TG2022, caso real) son legítimas, no errores.
+    result = evaluate("Tablet CLIQ TG2022 2GB 32GB 7", 225, None, [], base_cfg)
+    assert result.is_deal is False
+    assert result.score == 0.0

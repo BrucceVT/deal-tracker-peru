@@ -268,6 +268,47 @@ loop de main.py ya funciona para ese caso sin cambios.
 
 ---
 
+## Fase 6 — Ampliación de cobertura (tareas #13-#15) ✅ COMPLETA (2026-07-19)
+
+Motivación: el motor tenía rangos de error para TV/celular/tablet/monitor pero
+casi solo se escaneaban laptops (~700 productos). Ahora: **~2,300 productos
+por escaneo, 1,436 únicos tras el filtro de keywords** en 7 tiendas activas.
+
+### Categorías nuevas (todas validadas en vivo con los scrapers reales)
+- Falabella: + TV (cat210477), celulares (cat760706), tablets (cat270476),
+  monitores (cat40695). IDs extraídos del HTML de la propia página.
+- Plaza Vea: + televisores, celulares, tablets.
+- Oechsle: tecnologia → computo + televisores + celulares (mejor cobertura).
+
+### Tiendas nuevas (sondeo VTEX del 2026-07-19)
+- **Coolbox, Promart, Metro**: exponen la API pública VTEX → subclases de 3
+  líneas de `VtexApiScraper`, activas.
+- **Wong**: también VTEX pero deshabilitada por defecto — comparte catálogo
+  con Metro (ambos Cencosud) y duplicaría alertas del mismo error.
+- Hiraoka: no es VTEX (404). Tottus: 503. Sodimac: plataforma Falabella pero
+  la categoría probada devolvió 0 resultados. Los tres descartados por ahora.
+
+### Recalibración del motor tras la red ampliada (2 fuentes de ruido nuevas)
+1. **Tablets kids/ultra-baratas** (S/99-250 es precio normal): se quitó el
+   rango de error de "tablet" — existen tablets legítimas en todo el espectro
+   de precios, ningún rango absoluto distingue error de producto barato. La
+   categoría queda cubierta por las señales histórica y de descuento. Además
+   exclude_keywords += kids, niños, niñas, básico.
+2. **Listas infladas de marketplace** (caso real: "Redmi Pad 2 a S/919,
+   antes S/4,600" — descuento falso de 80%): `discount_pct_high` bajó de
+   peso 2.0 → 1.5. Ahora es señal de REFUERZO: no dispara sola, necesita
+   coincidir con el rango de error o con una caída histórica (que un vendedor
+   no puede falsificar). Las ANCLAS que sí disparan solas: rango de error
+   absoluto y caída histórica ≥60%.
+- Validado en vivo tras la recalibración: **0 alertas en ~2,300 productos**.
+
+### Guardia de fallos del workflow (tarea #15)
+`scan.yml` ahora postea al webhook de Discord si el job falla
+(`if: failure()`), con link al run — antes un fallo solo generaba un email
+de GitHub fácil de ignorar.
+
+---
+
 ## Orden de ejecución recomendado
 
 ```

@@ -87,6 +87,19 @@ jobs:
       - name: Generate static dashboard
         run: python scripts/generate_static_dashboard.py site/index.html
 
+      - name: Notify failure to Discord
+        # Sin esto, un fallo del scan solo genera un email de GitHub fácil de
+        # ignorar y el tracker podría quedar caído en silencio.
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -sS -X POST -H "Content-Type: application/json" \
+              -d "{\"content\": \"⚠️ **El escaneo del Deal Tracker falló.** Revisar: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+              "$DISCORD_WEBHOOK_URL"
+          fi
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

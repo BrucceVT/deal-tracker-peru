@@ -25,10 +25,14 @@ from core.deal_engine import evaluate
 from notifiers.discord import send_discord_alert
 from notifiers.telegram import send_telegram_alert
 from notifiers.webpush import send_webpush_alert
+from scrapers.coolbox import CoolboxScraper
 from scrapers.falabella import FalabellaScraper
+from scrapers.metro import MetroScraper
 from scrapers.oechsle import OechsleScraper
 from scrapers.plazavea import PlazaVeaScraper
+from scrapers.promart import PromartScraper
 from scrapers.ripley import RipleyScraper
+from scrapers.wong import WongScraper
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("deal-tracker")
@@ -38,6 +42,10 @@ SCRAPER_CLASSES = {
     "ripley": RipleyScraper,
     "plazavea": PlazaVeaScraper,
     "oechsle": OechsleScraper,
+    "coolbox": CoolboxScraper,
+    "promart": PromartScraper,
+    "metro": MetroScraper,
+    "wong": WongScraper,
 }
 
 

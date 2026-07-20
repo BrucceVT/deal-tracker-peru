@@ -4,11 +4,16 @@ Motor de decisión de ofertas.
 Combina varias señales en un score. Si el score >= min_score,
 el producto se considera una "oferta real" y se dispara alerta.
 
-Señales:
-  1. discount_pct_high     -> % de descuento (precio tachado vs precio actual) es DRÁSTICO (>=80% por config)
-  2. below_price_ceiling   -> precio cae en el rango de "error de precio" [floor, ceiling] de su categoría
+Señales (pesos en config.yaml):
+  1. discount_pct_high     -> descuento tachado DRÁSTICO (>=80% por config). REFUERZO, no
+                              dispara solo: los vendedores de marketplace inflan el precio
+                              de lista para fingir descuentos enormes (caso real visto:
+                              tablet a S/919 "antes S/4,600")
+  2. below_price_ceiling   -> precio cae en el rango de "error de precio" [floor, ceiling]
+                              de su categoría. ANCLA: dispara solo
   3. below_historical_min  -> es el precio más bajo jamás visto para ese producto (refuerzo)
-  4. below_historical_avg  -> caída drástica (>=60% por config) bajo el promedio histórico propio
+  4. below_historical_avg  -> caída drástica (>=60% por config) bajo el promedio histórico
+                              propio. ANCLA: dispara solo — esta no se puede falsificar
 
 FILOSOFÍA (recalibrado 2026-07-19 a pedido del usuario): el objetivo son
 ERRORES DE PRECIO (ej. laptop buena a S/475), no descuentos comunes de
