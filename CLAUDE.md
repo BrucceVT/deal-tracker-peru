@@ -16,8 +16,8 @@ Scrapea precios → evalúa con motor de señales → alerta por Discord/Telegra
 | Archivo | Qué hace | Notas |
 |---|---|---|
 | `main.py` | Loop infinito o `--once`: scan → evaluate → notify | `seen_urls` por-pasada (fix #1). `--once` probado en vivo (tarea #7, completa) |
-| `config.yaml` | Tiendas, keywords, umbrales, pesos, notificaciones, `exclude_keywords` | Se recarga en caliente cada ciclo. `price_ceiling` ahora es `{floor, ceiling}` por categoría |
-| `core/deal_engine.py` | Score de 4 señales, `evaluate()` | **Calibrado para ERRORES DE PRECIO, no descuentos comunes** (pedido del usuario 2026-07-19): descuento >=80%, rangos de error bajo el precio mínimo normal de mercado, caída histórica >=60%. Cada señal fuerte dispara sola. Reacondicionados y chromebooks excluidos |
+| `config.yaml` | Tiendas, keywords, umbrales, pesos, notificaciones, `exclude_keywords` | Se recarga en caliente cada ciclo. `price_ceiling` ELIMINADO (2026-07-20); ahora `deal_engine.min_reference_price` (piso de "producto caro") |
+| `core/deal_engine.py` | Score de señales, `evaluate()` | **Calibrado para ERRORES DE PRECIO en productos CAROS** (usuario 2026-07-20): GATE por `min_reference_price` (tachado o promedio histórico, NUNCA precio actual) → descarta equipos baratos. Anclas que disparan solas: descuento tachado >=80% y caída >=80% vs promedio histórico. Sin rangos absolutos por categoría. Reacondicionados/chromebooks excluidos |
 | `core/storage.py` | SQLite (`data/deals.db`): products, price_history, alerts_sent, push_subscriptions | `upsert_product_price` se dividió en `get_or_create_product` + `record_price_point` (fix #2). Dedupe de alertas con tolerancia de float (fix #4) |
 | `tests/` | 16 tests pytest (deal_engine + storage) | `python -m pytest tests/ -v` — protege los fixes de F1 |
 | `scrapers/types.py` | `ScrapedProduct`, `parse_price_pe()` — SIN Playwright | Separado a propósito para que scrapers API-only no carguen Chromium |

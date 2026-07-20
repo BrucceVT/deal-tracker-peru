@@ -74,47 +74,37 @@ exclude_keywords:
   - básico
   - basico
 
-# Rango de "error de precio" por categoría (soles): floor..ceiling.
-# FILOSOFÍA (2026-07-19, pedido del usuario): esto NO es para descuentos
-# comunes — es para cazar errores tipo "laptop buena a S/475". Por eso el
-# ceiling está POR DEBAJO del precio mínimo normal de mercado del producto
-# nuevo más barato de la categoría (medido con datos reales de las tiendas):
-#   laptop nueva más barata real  ~S/1,800  -> error si <= 900
-#   televisor más barato real     ~S/369    -> error si <= 300
-#   smartphone más barato real    ~S/329    -> error si <= 280
-# Un precio dentro de este rango ES un error casi seguro, así que la señal
-# puede disparar alerta ELLA SOLA (en errores de precio la tienda muchas
-# veces ni muestra precio tachado). El floor filtra accesorios mal detectados.
-#
-# "tablet" NO tiene rango a propósito (quitado 2026-07-19): existen tablets
-# legítimas en todo el espectro de precios hasta ~S/60 (kids, gama ultra-baja
-# genérica), así que ningún rango absoluto distingue error de producto barato.
-# Las tablets quedan cubiertas por las señales histórica y de descuento.
-price_ceiling:
-  laptop: {floor: 300, ceiling: 900}
-  televisor: {floor: 100, ceiling: 300}
-  smartphone: {floor: 100, ceiling: 280}
-  monitor: {floor: 80, ceiling: 250}
+# --- (Eliminado 2026-07-20) Rangos de "error de precio" por categoría ---
+# Antes había un `price_ceiling: {categoria: {floor, ceiling}}` que alertaba si
+# un precio caía bajo un umbral absoluto. Se ELIMINÓ para TODAS las categorías a
+# pedido del usuario: "no me sirven equipos que de por sí ya son baratos porque
+# normalmente son malos". Un precio bajo en sí mismo ya no es señal — puede ser
+# gama de entrada legítima (caso real: "ZTE Blade A35E a S/269"). Ahora el motor
+# solo mira la CAÍDA DRÁSTICA (>=80%) sobre un producto que normalmente es CARO,
+# medida vs el precio tachado o vs el promedio histórico. Ver deal_engine abajo.
 
 # --- Motor de decisión: combinación de señales ---
 # Un producto se considera OFERTA si su score >= min_score.
-# score = suma ponderada de señales activadas (ver core/deal_engine.py)
-# Calibrado para ERRORES DE PRECIO, no ofertas comunes. Señales ANCLA (pesan
-# 2.0 y disparan solas): rango de error absoluto y caída histórica >=60% —
-# ninguna de las dos puede falsificarla un vendedor. Señales de REFUERZO
-# (no disparan solas): el descuento tachado >=80% pesa 1.5 porque los
-# vendedores de marketplace inflan el precio de lista para fingir descuentos
-# (visto en vivo 2026-07-19: "Redmi Pad 2 a S/919, antes S/4,600" — falso);
-# y el mínimo histórico pesa 0.5.
+# score = suma ponderada de señales activadas (ver core/deal_engine.py).
+#
+# FILOSOFÍA (recalibrado 2026-07-20): errores de precio en productos CAROS —
+# una caída drástica (>=80%) de su precio real. Primero un GATE: si el producto
+# no supera min_reference_price (su precio de lista tachado o su promedio
+# histórico), se descarta sin evaluar señales. Dos señales ANCLA (pesan 2.0,
+# disparan solas):
+#   - descuento tachado >=80% (el usuario aceptó el riesgo de listas infladas de
+#     marketplace tipo "Redmi Pad antes S/4,600" a cambio de más cobertura).
+#   - caída >=80% vs el promedio histórico propio (esta NO se puede falsificar).
+# Refuerzo (no dispara solo): mínimo histórico, peso 0.5.
 deal_engine:
   min_score: 2.0
+  min_reference_price: 800  # piso de "producto caro": bajo esto ni se evalúa
   weights:
-    discount_pct_high: 1.5      # descuento >= threshold — refuerzo, no ancla (listas inflables)
-    below_price_ceiling: 2.0    # precio en el rango de "error" de su categoría
+    discount_pct_high: 2.0      # descuento tachado >=80% — ANCLA, dispara solo
     below_historical_min: 0.5   # refuerzo: es el precio más bajo jamás visto
-    below_historical_avg_pct: 2.0  # caída drástica vs promedio histórico propio
-  discount_pct_threshold: 80      # % mínimo de descuento (el usuario no quiere <80%)
-  historical_avg_pct_threshold: 60  # % mínimo de caída bajo el promedio histórico
+    below_historical_avg_pct: 2.0  # caída >=80% vs promedio histórico — ANCLA
+  discount_pct_threshold: 80      # % mínimo de descuento tachado
+  historical_avg_pct_threshold: 80  # % mínimo de caída bajo el promedio histórico
 
 # --- Notificaciones ---
 notifications:
