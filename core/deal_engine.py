@@ -17,12 +17,15 @@ Flujo:
      es justamente el bajo). Si esa referencia no supera min_reference_price, se
      descarta sin evaluar señales.
   2. Señales:
-     - discount_pct_high    -> descuento tachado >=80%. ANCLA: dispara solo.
-       (El usuario aceptó el riesgo de listas infladas de marketplace, ej.
-       "Redmi Pad 2 a S/919 antes S/4,600", a cambio de cazar errores desde la
-       primera vista, sin necesidad de historial.)
+     - discount_pct_high    -> descuento tachado >=80%. REFUERZO (peso bajo):
+       el precio tachado lo declara el vendedor y es 100% falsificable — caso
+       real (2026-07-20): "Tablet Redmi Pad 2 a S/949, antes S/10,000" (91%
+       dto., alertó 4 veces) resultó ser el mismo vendedor de marketplace
+       repitiendo el idéntico "antes S/10,000" en otro producto distinto. Ya
+       NUNCA dispara sola ni combinada solo con below_historical_min.
      - below_historical_avg -> caída >=80% vs el promedio histórico propio.
-       ANCLA: dispara solo — esta NO se puede falsificar.
+       ÚNICA ANCLA: dispara sola — esta la mide el propio tracker, no se
+       puede falsificar desde afuera.
      - below_historical_min -> es el precio más bajo jamás visto (refuerzo 0.5).
 """
 import re
@@ -85,7 +88,9 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
     score = 0.0
     reasons = []
 
-    # Señal 1 (ANCLA): descuento drástico >=80% vs el precio tachado de la tienda.
+    # Señal 1 (REFUERZO, no ancla): descuento drástico >=80% vs el precio tachado
+    # de la tienda. El vendedor controla ese número, así que solo suma puntos —
+    # nunca decide una alerta por sí sola (ver docstring del módulo).
     if original_price and original_price > current_price > 0:
         discount_pct = (1 - current_price / original_price) * 100
         if discount_pct >= discount_threshold:

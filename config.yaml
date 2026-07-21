@@ -90,20 +90,31 @@ exclude_keywords:
 # FILOSOFÍA (recalibrado 2026-07-20): errores de precio en productos CAROS —
 # una caída drástica (>=80%) de su precio real. Primero un GATE: si el producto
 # no supera min_reference_price (su precio de lista tachado o su promedio
-# histórico), se descarta sin evaluar señales. Dos señales ANCLA (pesan 2.0,
-# disparan solas):
-#   - descuento tachado >=80% (el usuario aceptó el riesgo de listas infladas de
-#     marketplace tipo "Redmi Pad antes S/4,600" a cambio de más cobertura).
-#   - caída >=80% vs el promedio histórico propio (esta NO se puede falsificar).
-# Refuerzo (no dispara solo): mínimo histórico, peso 0.5.
+# histórico), se descarta sin evaluar señales.
+#
+# CASO REAL que forzó este ajuste (2026-07-20): "TABLET XIAOMI REDMI PAD 2
+# 256GB | LAVANDA" en Plaza Vea, precio S/949 "antes S/10,000" (91% dto.) —
+# alertó 4 veces en producción. El mismo vendedor repite el idéntico truco
+# ("antes S/10,000") en OTRO producto distinto ("POCO PAD M1"). El precio
+# tachado nunca cambia entre escaneos porque lo controla el vendedor, no
+# nosotros: es dato 100% falsificable, a diferencia del promedio histórico que
+# el propio tracker mide con observaciones repetidas.
+#
+# Por eso `discount_pct_high` (descuento tachado) YA NO dispara alerta ni sola
+# ni combinada con el refuerzo débil de mínimo histórico (1.0 + 0.5 = 1.5,
+# sigue por debajo de min_score) — esa combinación dejaba una rendija abierta
+# para el mismo fraude si el precio del vendedor fluctúa un poco. Solo sirve
+# como confirmación adicional quando la caída histórica real YA calificó sola.
+# La ÚNICA señal ANCLA (dispara sola, peso 2.0) es la caída >=80% vs el
+# promedio histórico propio — no se puede falsificar porque la mide el tracker.
 deal_engine:
   min_score: 2.0
   min_reference_price: 800  # piso de "producto caro": bajo esto ni se evalúa
   weights:
-    discount_pct_high: 2.0      # descuento tachado >=80% — ANCLA, dispara solo
+    discount_pct_high: 1.0      # descuento tachado — refuerzo débil, nunca alcanza min_score ni combinado con below_historical_min
     below_historical_min: 0.5   # refuerzo: es el precio más bajo jamás visto
-    below_historical_avg_pct: 2.0  # caída >=80% vs promedio histórico — ANCLA
-  discount_pct_threshold: 80      # % mínimo de descuento tachado
+    below_historical_avg_pct: 2.0  # caída >=80% vs promedio histórico — ÚNICA ANCLA
+  discount_pct_threshold: 80      # % mínimo de descuento tachado (solo como refuerzo)
   historical_avg_pct_threshold: 80  # % mínimo de caída bajo el promedio histórico
 
 # --- Notificaciones ---
