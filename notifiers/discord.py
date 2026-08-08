@@ -45,7 +45,7 @@ async def send_discord_alert(cfg: dict, product, deal_result, store_name: str):
             {"name": "🏷️ Lista / Tachado", "value": f"S/ {product.original_price:.2f}" if product.original_price else "N/D", "inline": True},
             {"name": "📉 Dto. Tienda", "value": discount_field, "inline": True},
             {"name": "⚡ Confianza de Alerta", "value": fuerza_field, "inline": True},
-            {"name": "📦 Stock", "value": "Disponible" if product.in_stock else "Agotado", "inline": True},
+            {"name": "📦 Stock", "value": "✅ Disponible" if product.in_stock else "⚠️ Verificar en Tienda", "inline": True},
         ],
         "thumbnail": {"url": product.image_url} if product.image_url else None,
     }

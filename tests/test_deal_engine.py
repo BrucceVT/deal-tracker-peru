@@ -184,3 +184,45 @@ def test_category_keyword_mismatch_blocks(base_cfg, shampoo_profile):
     result = evaluate("Crema Facial Pond's Rejuveness", 5, 25, [], base_cfg, shampoo_profile)
     assert result.is_deal is False
     assert "no coincide con palabras clave" in result.reasons[0]
+
+
+def test_placeholder_price_99999_does_not_inflate_score(base_cfg):
+    """Un historial de precios S/99999 (placeholder de Knasta cuando no tiene dato
+    real) NO debe disparar señales de 'por debajo del promedio histórico'.
+    El proyector de S/149 con lista S/299 no debe alcanzar score >= 2.0 solo
+    por el placeholder; su score real es 1.0 (solo señal de descuento de tienda)."""
+    profile = {"min_reference_price": 80}
+    # Knasta devolvió dos puntos con precio placeholder S/99999
+    fake_history = [(99999.0, 1_000_000), (99999.0, 900_000)]
+    result = evaluate(
+        "Proyector Inteligente Nium Gol Vision 720P",
+        149.0,          # precio actual
+        299.0,          # lista/tachado en tienda (-50%)
+        fake_history,
+        base_cfg,
+        profile,
+    )
+    # Con precio barato (< S/300) se requiere >= 70% de descuento para señal 1.
+    # -50% no alcanza el umbral -> score debe ser 0.0
+    assert result.is_deal is False
+    assert result.score == 0.0
+
+
+def test_sane_history_still_works_after_filter(base_cfg):
+    """Asegurar que el filtro de precios irreales no afecta historiales reales."""
+    profile = {"min_reference_price": 250}
+    # Monitor a S/509, historial real de S/1449
+    real_history = [(1449.0, 1_000_000), (1400.0, 900_000), (1350.0, 800_000)]
+    result = evaluate(
+        "Monitor Gamer Acer Nitro VG272 27\" 165Hz",
+        509.0,
+        1449.0,
+        real_history,
+        base_cfg,
+        profile,
+    )
+    # Descuento de 64% >= 50% umbral (caro) -> señal 1 (+1.0)
+    # Caída vs avg (S/1399) = 63.6% >= 50% -> señal 2 (+2.0)
+    # S/509 < hist_min S/1350 -> señal 3 (+0.5)
+    assert result.is_deal is True
+    assert result.score >= 3.0

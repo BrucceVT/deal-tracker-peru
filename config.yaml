@@ -118,6 +118,8 @@ stores:
     categories:
       - url: "https://www.plazavea.com.pe/tecnologia/computo"
         type: computo
+      - url: "https://www.plazavea.com.pe/tecnologia/computo/monitores"
+        type: monitores
       - url: "https://www.plazavea.com.pe/tecnologia/televisores"
         type: televisores
       - url: "https://www.plazavea.com.pe/tecnologia/celulares"
@@ -140,6 +142,8 @@ stores:
     categories:
       - url: "https://www.oechsle.pe/tecnologia/computo"
         type: computo
+      - url: "https://www.oechsle.pe/tecnologia/computo/monitores"
+        type: monitores
       - url: "https://www.oechsle.pe/tecnologia/televisores"
         type: televisores
       - url: "https://www.oechsle.pe/tecnologia/celulares"

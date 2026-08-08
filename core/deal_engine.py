@@ -42,8 +42,14 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
         return DealResult(is_deal=False, score=0.0,
                           reasons=["Excluido: no coincide con palabras clave de la categoría"])
 
-    # Extraer historial
-    historical_prices = [p for p, _ in price_history if p]
+    # Extraer historial, descartando precios placeholder/irreales.
+    # Knasta a veces guarda S/99999 cuando no tiene dato real; esos valores
+    # harían explotar el promedio e inflarían el score artificialmente.
+    MAX_SANE_PRICE = 50_000
+    historical_prices = [
+        p for p, _ in price_history
+        if p and 0 < p <= MAX_SANE_PRICE and p <= current_price * 10
+    ]
     has_history = len(historical_prices) >= 2
     hist_min = min(historical_prices) if has_history else None
     hist_avg = (sum(historical_prices) / len(historical_prices)) if has_history else None

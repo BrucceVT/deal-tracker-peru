@@ -121,13 +121,13 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls, cat
     )
 
     if result.is_deal:
-        if not scraped.in_stock:
-            return  # no alertar productos agotados
-
         if storage.was_alert_sent_recently(product_id, scraped.price):
             return  # ya avisamos esta misma oferta hace poco
 
-        log.info("OFERTA: %s | S/%.2f | score=%.2f", scraped.title, scraped.price, result.score)
+        if not scraped.in_stock:
+            log.info("OFERTA (stock no confirmado): %s | S/%.2f | score=%.2f", scraped.title, scraped.price, result.score)
+        else:
+            log.info("OFERTA: %s | S/%.2f | score=%.2f", scraped.title, scraped.price, result.score)
         storage.record_alert(product_id, scraped.price, result.score)
 
         await asyncio.gather(
