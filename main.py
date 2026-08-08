@@ -80,6 +80,11 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls, cat
         return
     seen_urls.add(scraped.url)
 
+    # Filtrar solo productos que tengan algún descuento aplicado en la tienda
+    # (evita procesar productos a precio regular sin oferta)
+    if not scraped.original_price or scraped.original_price <= scraped.price:
+        return
+
     product_id = storage.get_or_create_product(
         store=store_name,
         url=scraped.url,
