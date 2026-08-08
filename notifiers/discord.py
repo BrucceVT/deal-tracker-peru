@@ -21,6 +21,19 @@ async def send_discord_alert(cfg: dict, product, deal_result, store_name: str):
         
     discount_field = f"**-{discount_pct:.0f}%**" if discount_pct else "N/D"
 
+    # Determinar nivel de confianza/fuerza de la oferta
+    score_val = deal_result.score
+    if score_val >= 3.5:
+        fuerza = "🚨 Crítico / Error de Precio"
+    elif score_val >= 3.0:
+        fuerza = "🔥 Muy Alta"
+    elif score_val >= 2.5:
+        fuerza = "📈 Alta"
+    else:
+        fuerza = "✅ Buena Oferta"
+        
+    fuerza_field = f"**{fuerza}** ({score_val:.1f})"
+
     embed = {
         "title": product.title[:250],
         "url": product.url,
@@ -31,7 +44,7 @@ async def send_discord_alert(cfg: dict, product, deal_result, store_name: str):
             {"name": "💰 Precio Oferta", "value": f"**S/ {product.price:.2f}**", "inline": True},
             {"name": "🏷️ Lista / Tachado", "value": f"S/ {product.original_price:.2f}" if product.original_price else "N/D", "inline": True},
             {"name": "📉 Dto. Tienda", "value": discount_field, "inline": True},
-            {"name": "🔥 Score", "value": f"**{deal_result.score}**", "inline": True},
+            {"name": "⚡ Confianza de Alerta", "value": fuerza_field, "inline": True},
             {"name": "📦 Stock", "value": "Disponible" if product.in_stock else "Agotado", "inline": True},
         ],
         "thumbnail": {"url": product.image_url} if product.image_url else None,
