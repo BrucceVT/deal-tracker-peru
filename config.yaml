@@ -41,136 +41,36 @@ exclude_keywords:
   - niñas
   - básico
   - basico
-  # Exclusiones para cosméticos/shampoo
+  # Exclusiones para cosméticos/shampoo/ropa
   - sachet
   - miniatura
   - muestra
 
 # --- Perfiles de Categoría ---
 # Cada perfil define el piso de "producto real" (bajo esto se descarta)
-# y las palabras clave requeridas en el título para esa categoría.
 category_profiles:
   computo:
     min_reference_price: 250
-    keywords:
-      - laptop
-      - notebook
-      - computadora
-      - pc gamer
-      - all in one
-      - monitor
   laptops:
     min_reference_price: 800
-    keywords:
-      - laptop
-      - notebook
-      - computadora
-      - pc gamer
-      - all in one
   televisores:
     min_reference_price: 600
-    keywords:
-      - televisor
-      - smart tv
-      - tv
   celulares:
     min_reference_price: 400
-    keywords:
-      - teléfono
-      - smartphone
-      - celular
   tablets:
     min_reference_price: 300
-    keywords:
-      - tablet
   monitores:
     min_reference_price: 250
-    keywords:
-      - monitor
   tecnologia_general:
     min_reference_price: 150
-    keywords:
-      - laptop
-      - notebook
-      - computadora
-      - pc gamer
-      - all in one
-      - monitor
-      - televisor
-      - smart tv
-      - tv
-      - teléfono
-      - smartphone
-      - celular
-      - tablet
-      - audífonos
-      - tarjeta gráfica
-      - procesador
-      - ssd
-      - disco duro
-      - router
   electrodomesticos:
     min_reference_price: 80
-    keywords:
-      - freidora
-      - licuadora
-      - microondas
-      - cafetera
-      - arrocera
-      - aspiradora
-      - hervidor
-      - plancha
-      - batidora
   cuidado_personal:
     min_reference_price: 15
-    keywords:
-      - shampoo
-      - champu
-      - champú
-      - crema
-      - hidratante
-      - serum
-      - gel
-      - bloqueador
-      - perfume
-      - fragancia
-      - desodorante
-      - colageno
-      - colágeno
-      - proteina
-      - proteína
   ropa_zapatos:
     min_reference_price: 40
-    keywords:
-      - polo
-      - casaca
-      - jean
-      - pantalon
-      - pantalón
-      - zapatilla
-      - zapato
-      - bota
-      - sandalia
-      - vestido
-      - camisa
-      - polera
   despensa_licores:
     min_reference_price: 15
-    keywords:
-      - aceite
-      - arroz
-      - cafe
-      - café
-      - leche
-      - pañales
-      - panales
-      - detergente
-      - whisky
-      - pisco
-      - gin
-      - ron
-      - cerveza
-      - vino
 
 # --- Motor de decisión: combinación de señales ---
 deal_engine:
