@@ -26,7 +26,7 @@ import httpx
 from scrapers.types import ScrapedProduct
 
 PAGE_SIZE = 50
-MAX_PRODUCTS = 200  # tope de seguridad por categoría (4 páginas)
+MAX_PRODUCTS = 400  # tope de seguridad por categoría (8 páginas)
 
 
 class VtexApiScraper:
@@ -43,7 +43,14 @@ class VtexApiScraper:
             timeout=15, headers={"User-Agent": "Mozilla/5.0 (compatible; deal-tracker/1.0)"}
         ) as client:
             while offset < MAX_PRODUCTS:
-                resp = await client.get(api_url, params={"_from": offset, "_to": offset + PAGE_SIZE - 1})
+                resp = await client.get(
+                    api_url, 
+                    params={
+                        "_from": offset, 
+                        "_to": offset + PAGE_SIZE - 1,
+                        "O": "OrderByBestDiscountDESC"
+                    }
+                )
                 # VTEX responde 206 (Partial Content) para paginación por rango,
                 # y 200 en la última página si el total calza exacto. 404 = fin
                 # de resultados (offset pasó el total).
