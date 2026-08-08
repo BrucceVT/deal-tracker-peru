@@ -123,7 +123,7 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls, cat
         storage.record_alert(product_id, scraped.price, result.score)
 
         await asyncio.gather(
-            send_discord_alert(cfg, scraped, result),
+            send_discord_alert(cfg, scraped, result, store_name),
             send_telegram_alert(cfg, scraped, result),
             send_webpush_alert(cfg, scraped, result),
             return_exceptions=True,

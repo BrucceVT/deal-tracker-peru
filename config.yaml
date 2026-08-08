@@ -50,6 +50,15 @@ exclude_keywords:
 # Cada perfil define el piso de "producto real" (bajo esto se descarta)
 # y las palabras clave requeridas en el título para esa categoría.
 category_profiles:
+  computo:
+    min_reference_price: 250
+    keywords:
+      - laptop
+      - notebook
+      - computadora
+      - pc gamer
+      - all in one
+      - monitor
   laptops:
     min_reference_price: 800
     keywords:
@@ -81,6 +90,19 @@ category_profiles:
   tecnologia_general:
     min_reference_price: 150
     keywords:
+      - laptop
+      - notebook
+      - computadora
+      - pc gamer
+      - all in one
+      - monitor
+      - televisor
+      - smart tv
+      - tv
+      - teléfono
+      - smartphone
+      - celular
+      - tablet
       - audífonos
       - tarjeta gráfica
       - procesador
@@ -195,7 +217,7 @@ stores:
     base_url: "https://www.plazavea.com.pe"
     categories:
       - url: "https://www.plazavea.com.pe/tecnologia/computo"
-        type: laptops
+        type: computo
       - url: "https://www.plazavea.com.pe/tecnologia/televisores"
         type: televisores
       - url: "https://www.plazavea.com.pe/tecnologia/celulares"
@@ -217,7 +239,7 @@ stores:
     base_url: "https://www.oechsle.pe"
     categories:
       - url: "https://www.oechsle.pe/tecnologia/computo"
-        type: laptops
+        type: computo
       - url: "https://www.oechsle.pe/tecnologia/televisores"
         type: televisores
       - url: "https://www.oechsle.pe/tecnologia/celulares"

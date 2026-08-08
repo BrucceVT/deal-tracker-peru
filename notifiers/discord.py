@@ -6,7 +6,7 @@ import httpx
 log = logging.getLogger("deal-tracker")
 
 
-async def send_discord_alert(cfg: dict, product, deal_result):
+async def send_discord_alert(cfg: dict, product, deal_result, store_name: str):
     settings = cfg["notifications"]["discord"]
     if not settings.get("enabled"):
         return
@@ -14,19 +14,25 @@ async def send_discord_alert(cfg: dict, product, deal_result):
     if "TU_WEBHOOK_AQUI" in webhook_url:
         return  # no configurado todavía
 
+    # Calcular descuento porcentual si es posible
+    discount_pct = None
+    if product.original_price and product.original_price > product.price:
+        discount_pct = (1 - product.price / product.original_price) * 100
+        
+    discount_field = f"**-{discount_pct:.0f}%**" if discount_pct else "N/D"
+
     embed = {
         "title": product.title[:250],
         "url": product.url,
         "description": "\n".join(f"• {r}" for r in deal_result.reasons),
         "color": 0x2ecc71,
         "fields": [
-            {"name": "Precio", "value": f"S/ {product.price:.2f}", "inline": True},
-            {
-                "name": "Precio original",
-                "value": f"S/ {product.original_price:.2f}" if product.original_price else "N/D",
-                "inline": True,
-            },
-            {"name": "Score", "value": str(deal_result.score), "inline": True},
+            {"name": "🏪 Tienda", "value": f"**{store_name.upper()}**", "inline": True},
+            {"name": "💰 Precio Oferta", "value": f"**S/ {product.price:.2f}**", "inline": True},
+            {"name": "🏷️ Lista / Tachado", "value": f"S/ {product.original_price:.2f}" if product.original_price else "N/D", "inline": True},
+            {"name": "📉 Dto. Tienda", "value": discount_field, "inline": True},
+            {"name": "🔥 Score", "value": f"**{deal_result.score}**", "inline": True},
+            {"name": "📦 Stock", "value": "Disponible" if product.in_stock else "Agotado", "inline": True},
         ],
         "thumbnail": {"url": product.image_url} if product.image_url else None,
     }

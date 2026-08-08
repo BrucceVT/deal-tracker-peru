@@ -47,7 +47,7 @@ async def test_retries_once_after_429_and_succeeds(mock_discord):
         return httpx.Response(204)
 
     mock_discord(handler)
-    await discord_mod.send_discord_alert(_cfg(), _product(), _result())
+    await discord_mod.send_discord_alert(_cfg(), _product(), _result(), "plazavea")
 
     assert len(calls) == 2  # el primer intento (429) + el retry exitoso
 
@@ -60,7 +60,7 @@ async def test_single_success_does_not_retry(mock_discord):
         return httpx.Response(204)
 
     mock_discord(handler)
-    await discord_mod.send_discord_alert(_cfg(), _product(), _result())
+    await discord_mod.send_discord_alert(_cfg(), _product(), _result(), "plazavea")
 
     assert len(calls) == 1
 
@@ -75,6 +75,6 @@ async def test_disabled_or_placeholder_webhook_sends_nothing(mock_discord):
     mock_discord(handler)
     cfg = _cfg()
     cfg["notifications"]["discord"]["webhook_url"] = "https://discord.com/api/webhooks/TU_WEBHOOK_AQUI"
-    await discord_mod.send_discord_alert(cfg, _product(), _result())
+    await discord_mod.send_discord_alert(cfg, _product(), _result(), "plazavea")
 
     assert len(calls) == 0

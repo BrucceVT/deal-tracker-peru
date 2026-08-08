@@ -59,9 +59,9 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
         )
 
     # 4. Umbrales adaptativos estilo Steam
-    is_expensive_category = min_reference_price >= 300
-    discount_threshold = 50 if is_expensive_category else 70
-    avg_threshold = 50 if is_expensive_category else 70
+    is_expensive = reference_price >= 300
+    discount_threshold = 50 if is_expensive else 70
+    avg_threshold = 50 if is_expensive else 70
 
     score = 0.0
     reasons = []
