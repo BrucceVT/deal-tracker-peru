@@ -178,3 +178,16 @@ def delete_push_subscription(endpoint):
     """Elimina una suscripción caducada/revocada (el push service devolvió 404/410)."""
     with get_conn() as conn:
         conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+
+
+def backfill_price_history(product_id, history: list[tuple[float, float]]):
+    """Limpia el historial existente de un producto y lo reemplaza con
+    los puntos de historial recuperados (ej. desde Knasta)."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM price_history WHERE product_id = ?", (product_id,))
+        conn.executemany(
+            """INSERT INTO price_history (product_id, price, original_price, in_stock, ts)
+               VALUES (?, ?, NULL, 1, ?)""",
+            [(product_id, price, ts) for price, ts in history]
+        )
+

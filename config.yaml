@@ -1,10 +1,8 @@
 # ============================================================
-# Configuración del Deal Tracker
+# Configuración del Deal Tracker Multicategoría
 # ============================================================
 
-# Cada cuánto se revisa cada tienda (segundos). Solo aplica al modo loop
-# (local/VPS); en GitHub Actions el ritmo lo pone el cron del workflow.
-# NO poner valores muy bajos (<20s) o te van a bloquear la IP.
+# Cada cuánto se revisa cada tienda (segundos). Solo aplica al modo loop (local/VPS)
 scan_interval:
   falabella: 45
   ripley: 45
@@ -15,34 +13,7 @@ scan_interval:
   metro: 60
   wong: 60
 
-# Palabras clave que definen "sector tecnología" (para filtrar productos)
-keywords:
-  - laptop
-  - notebook
-  - computadora
-  - pc gamer
-  - all in one
-  - monitor
-  - televisor
-  - smart tv
-  - teléfono
-  - smartphone
-  - celular
-  - tablet
-  - audífonos
-  - tarjeta gráfica
-  - procesador
-  - ssd
-  - disco duro
-
-# Palabras que, si aparecen en el título, EXCLUYEN el producto de todo el
-# análisis. Dos grupos:
-#   1. Accesorios mucho más baratos que el producto real que calzan por texto
-#      dentro del price_ceiling ("mochila para laptop" a S/59 no es una
-#      "laptop barata").
-#   2. Productos legítimamente baratos que NO son errores de precio:
-#      reacondicionados (S/899-1139 es su precio normal) y chromebooks
-#      (S/500-700 nuevos es normal).
+# Exclusiones globales de palabras clave para evitar falsos positivos
 exclude_keywords:
   - mochila
   - funda
@@ -65,57 +36,230 @@ exclude_keywords:
   - reacondicionada
   - refurbished
   - chromebook
-  # Productos infantiles / de gama ultra-básica: su precio normal es tan bajo
-  # que caería dentro de los rangos de error (visto en vivo con la red ampliada
-  # de tiendas el 2026-07-19: "Tablet Advance KIDs a S/99" no es un error).
   - kids
   - niños
   - niñas
   - básico
   - basico
+  # Exclusiones para cosméticos/shampoo
+  - sachet
+  - miniatura
+  - muestra
 
-# --- (Eliminado 2026-07-20) Rangos de "error de precio" por categoría ---
-# Antes había un `price_ceiling: {categoria: {floor, ceiling}}` que alertaba si
-# un precio caía bajo un umbral absoluto. Se ELIMINÓ para TODAS las categorías a
-# pedido del usuario: "no me sirven equipos que de por sí ya son baratos porque
-# normalmente son malos". Un precio bajo en sí mismo ya no es señal — puede ser
-# gama de entrada legítima (caso real: "ZTE Blade A35E a S/269"). Ahora el motor
-# solo mira la CAÍDA DRÁSTICA (>=80%) sobre un producto que normalmente es CARO,
-# medida vs el precio tachado o vs el promedio histórico. Ver deal_engine abajo.
+# --- Perfiles de Categoría ---
+# Cada perfil define el piso de "producto real" (bajo esto se descarta)
+# y las palabras clave requeridas en el título para esa categoría.
+category_profiles:
+  laptops:
+    min_reference_price: 800
+    keywords:
+      - laptop
+      - notebook
+      - computadora
+      - pc gamer
+      - all in one
+  televisores:
+    min_reference_price: 600
+    keywords:
+      - televisor
+      - smart tv
+      - tv
+  celulares:
+    min_reference_price: 400
+    keywords:
+      - teléfono
+      - smartphone
+      - celular
+  tablets:
+    min_reference_price: 300
+    keywords:
+      - tablet
+  monitores:
+    min_reference_price: 250
+    keywords:
+      - monitor
+  tecnologia_general:
+    min_reference_price: 150
+    keywords:
+      - audífonos
+      - tarjeta gráfica
+      - procesador
+      - ssd
+      - disco duro
+      - router
+  electrodomesticos:
+    min_reference_price: 80
+    keywords:
+      - freidora
+      - licuadora
+      - microondas
+      - cafetera
+      - arrocera
+      - aspiradora
+      - hervidor
+      - plancha
+      - batidora
+  cuidado_personal:
+    min_reference_price: 15
+    keywords:
+      - shampoo
+      - champu
+      - champú
+      - crema
+      - hidratante
+      - serum
+      - gel
+      - bloqueador
+      - perfume
+      - fragancia
+      - desodorante
+      - colageno
+      - colágeno
+      - proteina
+      - proteína
+  ropa_zapatos:
+    min_reference_price: 40
+    keywords:
+      - polo
+      - casaca
+      - jean
+      - pantalon
+      - pantalón
+      - zapatilla
+      - zapato
+      - bota
+      - sandalia
+      - vestido
+      - camisa
+      - polera
+  despensa_licores:
+    min_reference_price: 15
+    keywords:
+      - aceite
+      - arroz
+      - cafe
+      - café
+      - leche
+      - pañales
+      - panales
+      - detergente
+      - whisky
+      - pisco
+      - gin
+      - ron
+      - cerveza
+      - vino
 
 # --- Motor de decisión: combinación de señales ---
-# Un producto se considera OFERTA si su score >= min_score.
-# score = suma ponderada de señales activadas (ver core/deal_engine.py).
-#
-# FILOSOFÍA (recalibrado 2026-07-20): errores de precio en productos CAROS —
-# una caída drástica (>=80%) de su precio real. Primero un GATE: si el producto
-# no supera min_reference_price (su precio de lista tachado o su promedio
-# histórico), se descarta sin evaluar señales.
-#
-# CASO REAL que forzó este ajuste (2026-07-20): "TABLET XIAOMI REDMI PAD 2
-# 256GB | LAVANDA" en Plaza Vea, precio S/949 "antes S/10,000" (91% dto.) —
-# alertó 4 veces en producción. El mismo vendedor repite el idéntico truco
-# ("antes S/10,000") en OTRO producto distinto ("POCO PAD M1"). El precio
-# tachado nunca cambia entre escaneos porque lo controla el vendedor, no
-# nosotros: es dato 100% falsificable, a diferencia del promedio histórico que
-# el propio tracker mide con observaciones repetidas.
-#
-# Por eso `discount_pct_high` (descuento tachado) YA NO dispara alerta ni sola
-# ni combinada con el refuerzo débil de mínimo histórico (1.0 + 0.5 = 1.5,
-# sigue por debajo de min_score) — esa combinación dejaba una rendija abierta
-# para el mismo fraude si el precio del vendedor fluctúa un poco. Solo sirve
-# como confirmación adicional quando la caída histórica real YA calificó sola.
-# La ÚNICA señal ANCLA (dispara sola, peso 2.0) es la caída >=80% vs el
-# promedio histórico propio — no se puede falsificar porque la mide el tracker.
 deal_engine:
   min_score: 2.0
-  min_reference_price: 800  # piso de "producto caro": bajo esto ni se evalúa
   weights:
-    discount_pct_high: 1.0      # descuento tachado — refuerzo débil, nunca alcanza min_score ni combinado con below_historical_min
-    below_historical_min: 0.5   # refuerzo: es el precio más bajo jamás visto
-    below_historical_avg_pct: 2.0  # caída >=80% vs promedio histórico — ÚNICA ANCLA
-  discount_pct_threshold: 80      # % mínimo de descuento tachado (solo como refuerzo)
-  historical_avg_pct_threshold: 80  # % mínimo de caída bajo el promedio histórico
+    discount_pct_high: 1.0        # descuento tachado
+    below_historical_min: 0.5     # precio mínimo histórico
+    below_historical_avg_pct: 2.0 # caída respecto al promedio histórico (ancla)
+
+# --- Tiendas y Categorías ---
+stores:
+  falabella:
+    enabled: true
+    base_url: "https://www.falabella.com.pe"
+    categories:
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat40712/Laptops"
+        type: laptops
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat50678/Computadoras"
+        type: laptops
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat210477/TV-Televisores"
+        type: televisores
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat760706/Celulares-y-Telefonos"
+        type: celulares
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat270476/Tablets"
+        type: tablets
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat40695/Monitores"
+        type: monitores
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat4074/Calzado-Mujer"
+        type: ropa_zapatos
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat4091/Calzado-Hombre"
+        type: ropa_zapatos
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat2009/Electrodomesticos-de-Cocina"
+        type: electrodomesticos
+      - url: "https://www.falabella.com.pe/falabella-pe/category/cat4014/Perfumes"
+        type: cuidado_personal
+  ripley:
+    enabled: true
+    base_url: "https://simple.ripley.com.pe"
+    categories:
+      - url: "https://simple.ripley.com.pe/tecnologia/computacion/laptops"
+        type: laptops
+  plazavea:
+    enabled: true
+    base_url: "https://www.plazavea.com.pe"
+    categories:
+      - url: "https://www.plazavea.com.pe/tecnologia/computo"
+        type: laptops
+      - url: "https://www.plazavea.com.pe/tecnologia/televisores"
+        type: televisores
+      - url: "https://www.plazavea.com.pe/tecnologia/celulares"
+        type: celulares
+      - url: "https://www.plazavea.com.pe/tecnologia/tablets"
+        type: tablets
+      - url: "https://www.plazavea.com.pe/cuidado-personal/cabello/shampoo"
+        type: cuidado_personal
+      - url: "https://www.plazavea.com.pe/cuidado-personal/cuidado-de-la-piel/cuidado-facial/cremas-faciales"
+        type: cuidado_personal
+      - url: "https://www.plazavea.com.pe/electrohogar/electrodomesticos-de-cocina"
+        type: electrodomesticos
+      - url: "https://www.plazavea.com.pe/supermercado/abarrotes"
+        type: despensa_licores
+      - url: "https://www.plazavea.com.pe/supermercado/vinos-y-licores"
+        type: despensa_licores
+  oechsle:
+    enabled: true
+    base_url: "https://www.oechsle.pe"
+    categories:
+      - url: "https://www.oechsle.pe/tecnologia/computo"
+        type: laptops
+      - url: "https://www.oechsle.pe/tecnologia/televisores"
+        type: televisores
+      - url: "https://www.oechsle.pe/tecnologia/celulares"
+        type: celulares
+      - url: "https://www.oechsle.pe/moda-y-accesorios/zapatos/calzado-mujer"
+        type: ropa_zapatos
+      - url: "https://www.oechsle.pe/moda-y-accesorios/zapatos/calzado-hombre"
+        type: ropa_zapatos
+  coolbox:
+    enabled: true
+    base_url: "https://www.coolbox.pe"
+    categories:
+      - url: "https://www.coolbox.pe/tecnologia"
+        type: tecnologia_general
+  promart:
+    enabled: true
+    base_url: "https://www.promart.pe"
+    categories:
+      - url: "https://www.promart.pe/tecnologia"
+        type: tecnologia_general
+  metro:
+    enabled: true
+    base_url: "https://www.metro.pe"
+    categories:
+      - url: "https://www.metro.pe/tecnologia"
+        type: tecnologia_general
+      - url: "https://www.metro.pe/cuidado-personal/cuidado-del-cabello/shampoo"
+        type: cuidado_personal
+      - url: "https://www.metro.pe/cuidado-personal/cuidado-de-la-piel/cuidado-facial/cremas-faciales"
+        type: cuidado_personal
+      - url: "https://www.metro.pe/electrohogar/electrodomesticos-de-cocina"
+        type: electrodomesticos
+      - url: "https://www.metro.pe/abarrotes"
+        type: despensa_licores
+      - url: "https://www.metro.pe/bebidas-y-licores"
+        type: despensa_licores
+  wong:
+    enabled: false
+    base_url: "https://www.wong.pe"
+    categories:
+      - url: "https://www.wong.pe/tecnologia"
+        type: tecnologia_general
 
 # --- Notificaciones ---
 notifications:
@@ -128,66 +272,6 @@ notifications:
     chat_id: "TU_CHAT_ID_AQUI"
   webpush:
     enabled: true
-    vapid_public_key: ""   # generado con scripts/generate_vapid_keys.py
+    vapid_public_key: ""
     vapid_private_key: ""
     vapid_claims_email: "mailto:tu_correo@example.com"
-
-# --- Tiendas activas ---
-# Todas las URLs de categoría fueron validadas en vivo el 2026-07-19 con los
-# scrapers reales (ver docs/PLAN.md, Fase 6).
-stores:
-  falabella:
-    enabled: true
-    base_url: "https://www.falabella.com.pe"
-    categories:
-      - "https://www.falabella.com.pe/falabella-pe/category/cat40712/Laptops"
-      - "https://www.falabella.com.pe/falabella-pe/category/cat50678/Computadoras"
-      - "https://www.falabella.com.pe/falabella-pe/category/cat210477/TV-Televisores"
-      - "https://www.falabella.com.pe/falabella-pe/category/cat760706/Celulares-y-Telefonos"
-      - "https://www.falabella.com.pe/falabella-pe/category/cat270476/Tablets"
-      - "https://www.falabella.com.pe/falabella-pe/category/cat40695/Monitores"
-  ripley:
-    # Solo aporta en ejecución local/VPS: Cloudflare bloquea el browser
-    # headless desde las IPs de datacenter de GitHub Actions.
-    enabled: true
-    base_url: "https://simple.ripley.com.pe"
-    categories:
-      # "computo" ya no existe (devolvía 404) -> corregido a "computacion" (2026-07-19)
-      - "https://simple.ripley.com.pe/tecnologia/computacion/laptops"
-  plazavea:
-    enabled: true
-    base_url: "https://www.plazavea.com.pe"
-    categories:
-      - "https://www.plazavea.com.pe/tecnologia/computo"
-      - "https://www.plazavea.com.pe/tecnologia/televisores"
-      - "https://www.plazavea.com.pe/tecnologia/celulares"
-      - "https://www.plazavea.com.pe/tecnologia/tablets"
-  oechsle:
-    enabled: true
-    base_url: "https://www.oechsle.pe"
-    categories:
-      - "https://www.oechsle.pe/tecnologia/computo"
-      - "https://www.oechsle.pe/tecnologia/televisores"
-      - "https://www.oechsle.pe/tecnologia/celulares"
-  coolbox:
-    enabled: true
-    base_url: "https://www.coolbox.pe"
-    categories:
-      - "https://www.coolbox.pe/tecnologia"
-  promart:
-    enabled: true
-    base_url: "https://www.promart.pe"
-    categories:
-      - "https://www.promart.pe/tecnologia"
-  metro:
-    enabled: true
-    base_url: "https://www.metro.pe"
-    categories:
-      - "https://www.metro.pe/tecnologia"
-  wong:
-    # Deshabilitado: comparte catálogo con Metro (ambos Cencosud) y
-    # duplicaría las alertas del mismo error de precio.
-    enabled: false
-    base_url: "https://www.wong.pe"
-    categories:
-      - "https://www.wong.pe/tecnologia"

@@ -22,6 +22,7 @@ import yaml
 
 from core import storage
 from core.deal_engine import evaluate
+from core.knasta import get_knasta_history
 from notifiers.discord import send_discord_alert
 from notifiers.telegram import send_telegram_alert
 from notifiers.webpush import send_webpush_alert
@@ -74,18 +75,10 @@ def _apply_env_overrides(cfg):
         cfg["notifications"]["telegram"]["enabled"] = True
 
 
-def matches_keywords(title: str, keywords: list[str]) -> bool:
-    title_lower = title.lower()
-    return any(kw.lower() in title_lower for kw in keywords)
-
-
-async def process_product(cfg, store_name, category_url, scraped, seen_urls):
+async def process_product(cfg, store_name, category_url, scraped, seen_urls, category_profile):
     if scraped.url in seen_urls:
         return
     seen_urls.add(scraped.url)
-
-    if not matches_keywords(scraped.title, cfg["keywords"]):
-        return
 
     product_id = storage.get_or_create_product(
         store=store_name,
@@ -99,7 +92,24 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls):
     # si no, "precio más bajo histórico" nunca podría dispararse.
     history = storage.get_price_history(product_id)
 
-    result = evaluate(scraped.title, scraped.price, scraped.original_price, history, cfg)
+    # ¿Necesitamos validar/poblar con Knasta?
+    # 1. Si no hay suficiente historial (menos de 5 registros).
+    # 2. Si hay sospecha de oferta por descuento tachado >=35% o baja de precio respecto al último registrado.
+    needs_bootstrap = len(history) < 5
+    store_discount = (1 - scraped.price / scraped.original_price) if (scraped.original_price and scraped.original_price > scraped.price) else 0.0
+    last_price = history[0][0] if history else None
+    has_drop = last_price and scraped.price < last_price
+    is_candidate = store_discount >= 0.35 or has_drop
+
+    if needs_bootstrap or is_candidate:
+        log.info("Consultando Knasta para '%s' (bootstrap=%s, candidate=%s)", scraped.title, needs_bootstrap, is_candidate)
+        knasta_history = await get_knasta_history(scraped.title, scraped.url, store_name)
+        if knasta_history:
+            storage.backfill_price_history(product_id, knasta_history)
+            # Volver a cargar el historial recién guardado
+            history = storage.get_price_history(product_id)
+
+    result = evaluate(scraped.title, scraped.price, scraped.original_price, history, cfg, category_profile)
 
     storage.record_price_point(
         product_id, scraped.price, scraped.original_price, scraped.in_stock
@@ -128,12 +138,26 @@ async def scan_store(cfg, store_name, store_cfg):
     seen_urls = set()  # dedupe solo dentro de ESTA pasada (mismo producto en varias categorías)
 
     try:
-        for category_url in store_cfg.get("categories", []):
+        for cat_item in store_cfg.get("categories", []):
+            if isinstance(cat_item, dict):
+                category_url = cat_item["url"]
+                category_type = cat_item["type"]
+            else:
+                category_url = cat_item
+                category_type = "laptops"
+                
+            category_profile = cfg.get("category_profiles", {}).get(category_type, {})
+            if not category_profile:
+                category_profile = {
+                    "min_reference_price": 0,
+                    "keywords": []
+                }
+
             try:
                 products = await scraper.fetch_category(category_url)
                 log.info("%s: %d productos encontrados en %s", store_name, len(products), category_url)
                 for p in products:
-                    await process_product(cfg, store_name, category_url, p, seen_urls)
+                    await process_product(cfg, store_name, category_url, p, seen_urls, category_profile)
             except Exception:
                 log.exception("Error escaneando %s (%s)", store_name, category_url)
             await scraper.polite_delay()
