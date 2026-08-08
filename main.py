@@ -121,6 +121,9 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls, cat
     )
 
     if result.is_deal:
+        if not scraped.in_stock:
+            return  # no alertar productos agotados
+
         if storage.was_alert_sent_recently(product_id, scraped.price):
             return  # ya avisamos esta misma oferta hace poco
 

@@ -117,8 +117,8 @@ def get_price_history(product_id, limit=200):
         return [(r["price"], r["ts"]) for r in rows]
 
 
-def was_alert_sent_recently(product_id, price, window_seconds=6 * 3600):
-    """Evita re-notificar el mismo producto al mismo precio cada 45s.
+def was_alert_sent_recently(product_id, price, window_seconds=3 * 24 * 3600):
+    """Evita re-notificar el mismo producto al mismo precio en 3 días.
 
     Compara con tolerancia (no ==) porque price_at_alert viene de un scrape
     y puede diferir en centavos por redondeos entre lecturas del mismo precio.
