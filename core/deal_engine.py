@@ -68,34 +68,36 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
 
     # 4. Umbrales adaptativos estilo Steam
     is_expensive = reference_price >= 300
-    discount_threshold = 50 if is_expensive else 70        # umbral base
-    discount_threshold_mega = 60 if is_expensive else 85   # umbral «gran oferta»
+    discount_threshold = 50 if is_expensive else 70        # umbral base de descuento tachado
     avg_threshold = 50 if is_expensive else 70
+    market_threshold = 25 if is_expensive else 35         # umbral de caída real vs mediana del mercado
 
     score = 0.0
     reasons = []
 
-    # Señal 1a: Descuento tachado >= umbral base (+1.0)
-    # Señal 1b: Descuento tachado >= umbral «gran oferta» (+1.0 adicional)
-    if has_history and hist_avg:
-        list_price_credible = (effective_original_price is not None) and (effective_original_price <= hist_avg * 3)
-    else:
-        list_price_credible = (effective_original_price is not None) and (effective_original_price <= current_price * 5)
-
+    # Señal 1: Descuento tachado declarado por la tienda (máximo +1.0)
+    # Sirve como booster secundario, pero NUNCA da el pase automático de 2.0 por sí solo
+    # (evita falsas ofertas por precios tachados inflados de las tiendas).
     if effective_original_price and effective_original_price > current_price > 0:
         discount_pct = (1 - current_price / effective_original_price) * 100
         if discount_pct >= discount_threshold:
             score += weights["discount_pct_high"]
             reasons.append(
-                f"Descuento de {discount_pct:.0f}% vs precio de lista/mercado (S/{effective_original_price:.0f})"
-            )
-        if list_price_credible and discount_pct >= discount_threshold_mega:
-            score += weights["discount_pct_high"]
-            reasons.append(
-                f"Gran descuento de lista/mercado: {discount_pct:.0f}% (>={discount_threshold_mega:.0f}%)"
+                f"Descuento de {discount_pct:.0f}% vs precio de lista (S/{effective_original_price:.0f})"
             )
 
-    # Señales 2 y 3: Caída respecto al historial propio
+    # Señal 2: Caída real respecto al Consenso de Mercado en Perú
+    if market_consensus_price and market_consensus_price > current_price > 0:
+        market_drop_pct = (1 - current_price / market_consensus_price) * 100
+        if market_drop_pct >= market_threshold:
+            # Si la caída vs mercado es masiva (≥40%), otorga +2.0 (oferta clara de mercado)
+            market_weight = weights["below_historical_avg_pct"] if market_drop_pct >= 40 else weights["discount_pct_high"]
+            score += market_weight
+            reasons.append(
+                f"{market_drop_pct:.0f}% bajo la mediana del mercado en Perú (S/{market_consensus_price:.0f})"
+            )
+
+    # Señales 3 y 4: Caída respecto al historial propio de la tienda
     if has_history:
         if hist_avg > 0:
             avg_drop_pct = (1 - current_price / hist_avg) * 100
