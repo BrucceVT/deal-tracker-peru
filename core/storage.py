@@ -117,20 +117,32 @@ def get_price_history(product_id, limit=200):
         return [(r["price"], r["ts"]) for r in rows]
 
 
-def was_alert_sent_recently(product_id, price, window_seconds=3 * 24 * 3600):
+def was_alert_sent_recently(product_id, price, store=None, title=None, window_seconds=3 * 24 * 3600):
     """Evita re-notificar el mismo producto al mismo precio en 3 días.
 
-    Compara con tolerancia (no ==) porque price_at_alert viene de un scrape
-    y puede diferir en centavos por redondeos entre lecturas del mismo precio.
+    Compara tanto por product_id como por (store, title) para evitar duplicados
+    cuando la tienda publica el mismo producto físico con URLs o SKUs distintos.
     """
     cutoff = time.time() - window_seconds
     with get_conn() as conn:
-        row = conn.execute(
-            """SELECT id FROM alerts_sent
-               WHERE product_id = ? AND ABS(price_at_alert - ?) < 0.01 AND ts >= ?
-               LIMIT 1""",
-            (product_id, price, cutoff),
-        ).fetchone()
+        if store and title:
+            clean_title = title.strip().lower()
+            row = conn.execute(
+                """SELECT a.id FROM alerts_sent a
+                   JOIN products p ON p.id = a.product_id
+                   WHERE (a.product_id = ? OR (p.store = ? AND LOWER(TRIM(p.title)) = ?))
+                     AND ABS(a.price_at_alert - ?) < 0.01
+                     AND a.ts >= ?
+                   LIMIT 1""",
+                (product_id, store, clean_title, price, cutoff),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """SELECT id FROM alerts_sent
+                   WHERE product_id = ? AND ABS(price_at_alert - ?) < 0.01 AND ts >= ?
+                   LIMIT 1""",
+                (product_id, price, cutoff),
+            ).fetchone()
         return row is not None
 
 

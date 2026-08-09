@@ -76,9 +76,11 @@ def _apply_env_overrides(cfg):
 
 
 async def process_product(cfg, store_name, category_url, scraped, seen_urls, category_profile):
-    if scraped.url in seen_urls:
+    title_key = (store_name, scraped.title.strip().lower())
+    if scraped.url in seen_urls or title_key in seen_urls:
         return
     seen_urls.add(scraped.url)
+    seen_urls.add(title_key)
 
     # Filtrar solo productos que tengan algún descuento aplicado en la tienda
     # (evita procesar productos a precio regular sin oferta)
@@ -112,6 +114,8 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls, cat
         if knasta_history:
             storage.backfill_price_history(product_id, knasta_history)
             # Volver a cargar el historial recién guardado
+            history = storage.get_price_history(product_id)
+
     market_consensus = None
     if len(history) < 3 or (scraped.original_price and scraped.original_price > scraped.price * 1.5):
         market_consensus = await get_market_consensus_price(scraped.title)
@@ -126,7 +130,7 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls, cat
     )
 
     if result.is_deal:
-        if storage.was_alert_sent_recently(product_id, scraped.price):
+        if storage.was_alert_sent_recently(product_id, scraped.price, store=store_name, title=scraped.title):
             return  # ya avisamos esta misma oferta hace poco
 
         if not scraped.in_stock:

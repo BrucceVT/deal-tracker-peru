@@ -92,3 +92,23 @@ def test_recent_deals_joins_product_info(temp_db):
     assert deals[0]["title"] == "PC Gamer ASUS"
     assert deals[0]["store"] == "falabella"
     assert deals[0]["price_at_alert"] == 2500.0
+
+
+def test_was_alert_sent_recently_deduplicates_by_store_and_title(temp_db):
+    # Producto 1 guardado con URL A
+    pid1 = storage.get_or_create_product(
+        store="plazavea", url="https://plazavea.pe/toner-1", title="Toner Konica Minolta TN-118 Negro",
+        category="computo", image_url=None,
+    )
+    storage.record_alert(pid1, 150.0, score=2.0)
+
+    # Producto 2 guardado con URL B (mismo título y tienda, id distinto)
+    pid2 = storage.get_or_create_product(
+        store="plazavea", url="https://plazavea.pe/toner-2-variante", title="Toner Konica Minolta TN-118 Negro",
+        category="computo", image_url=None,
+    )
+    assert pid2 != pid1
+
+    # Al consultar pasando (store, title), debe detectar que ya se alertó el mismo producto en esa tienda
+    assert storage.was_alert_sent_recently(pid2, 150.0, store="plazavea", title="Toner Konica Minolta TN-118 Negro") is True
+

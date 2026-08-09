@@ -41,10 +41,16 @@ exclude_keywords:
   - niñas
   - básico
   - basico
-  # Exclusiones para cosméticos/shampoo/ropa
+  # Exclusiones para cosméticos/shampoo/ropa/consumibles
   - sachet
   - miniatura
   - muestra
+  - toner
+  - tóner
+  - tinta
+  - cartucho
+  - cinta
+  - tambor
 
 # --- Perfiles de Categoría ---
 # Cada perfil define el piso de "producto real" (bajo esto se descarta)
