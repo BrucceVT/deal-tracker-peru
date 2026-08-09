@@ -43,6 +43,7 @@ def init_db():
                 price_at_alert REAL NOT NULL,
                 score REAL NOT NULL,
                 ts REAL NOT NULL,
+                discord_message_id TEXT,
                 FOREIGN KEY (product_id) REFERENCES products(id)
             );
 
@@ -57,6 +58,12 @@ def init_db():
                 ON price_history(product_id);
             """
         )
+    # Migración defensiva si la DB ya existía sin la columna
+    try:
+        with get_conn() as conn:
+            conn.execute("ALTER TABLE alerts_sent ADD COLUMN discord_message_id TEXT;")
+    except Exception:
+        pass
 
 
 @contextmanager
@@ -146,12 +153,18 @@ def was_alert_sent_recently(product_id, price, store=None, title=None, window_se
         return row is not None
 
 
-def record_alert(product_id, price, score):
+def record_alert(product_id, price, score, discord_message_id=None):
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO alerts_sent (product_id, price_at_alert, score, ts) VALUES (?, ?, ?, ?)",
-            (product_id, price, score, time.time()),
+            "INSERT INTO alerts_sent (product_id, price_at_alert, score, ts, discord_message_id) VALUES (?, ?, ?, ?, ?)",
+            (product_id, price, score, time.time(), discord_message_id),
         )
+
+
+def get_all_discord_message_ids():
+    with get_conn() as conn:
+        rows = conn.execute("SELECT discord_message_id FROM alerts_sent WHERE discord_message_id IS NOT NULL").fetchall()
+        return [r["discord_message_id"] for r in rows]
 
 
 def recent_deals(limit=50):

@@ -137,10 +137,11 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls, cat
             log.info("OFERTA (stock no confirmado): %s | S/%.2f | score=%.2f", scraped.title, scraped.price, result.score)
         else:
             log.info("OFERTA: %s | S/%.2f | score=%.2f", scraped.title, scraped.price, result.score)
-        storage.record_alert(product_id, scraped.price, result.score)
+
+        discord_msg_id = await send_discord_alert(cfg, scraped, result, store_name)
+        storage.record_alert(product_id, scraped.price, result.score, discord_message_id=discord_msg_id)
 
         await asyncio.gather(
-            send_discord_alert(cfg, scraped, result, store_name),
             send_telegram_alert(cfg, scraped, result),
             send_webpush_alert(cfg, scraped, result),
             return_exceptions=True,
