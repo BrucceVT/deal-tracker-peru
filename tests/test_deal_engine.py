@@ -228,3 +228,27 @@ def test_sane_history_still_works_after_filter(base_cfg):
     # S/509 < hist_min S/1350 -> señal 3 (+0.5)
     assert result.is_deal is True
     assert result.score >= 3.0
+
+
+def test_inflated_list_price_with_market_consensus(base_cfg):
+    """
+    Caso real de la impresora Brother MFC-T4500DW:
+    - Oechsle pone un precio tachado inflado de S/7,199.00
+    - Precio oferta: S/2,539.00 (-65% aparente)
+    - Pero el consenso de mercado (mediana en Perú) es S/2,789.50
+    - Con la validación de consenso de mercado, el descuento real es solo ~9% vs S/2789.50
+    - El motor DEBE rechazar la oferta falsa (score = 0.0, is_deal = False).
+    """
+    profile = {"min_reference_price": 250}
+    result = evaluate(
+        "IMPRESORA MULTIFUNCIONAL A3 MFC - T4500DW Dúplex ADF Wifi",
+        2539.0,                # precio oferta
+        7199.0,                # precio tachado inflado de la tienda
+        [],                    # sin historial previo
+        base_cfg,
+        profile,
+        market_consensus_price=2789.50 # mediana real del mercado en Perú
+    )
+    assert result.is_deal is False
+    assert result.score == 0.0
+

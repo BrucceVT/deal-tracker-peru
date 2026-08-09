@@ -15,21 +15,11 @@ def _contains_word(title_lower: str, word: str) -> bool:
     return re.search(rf"\b{re.escape(word.lower())}\b", title_lower) is not None
 
 def evaluate(product_title: str, current_price: float, original_price: float | None,
-             price_history: list[tuple[float, float]], cfg: dict, category_profile: dict) -> DealResult:
+             price_history: list[tuple[float, float]], cfg: dict, category_profile: dict,
+             market_consensus_price: float | None = None) -> DealResult:
     """
     Evalúa si un producto es una oferta real basándose en su precio actual,
-    el precio de lista de la tienda y su historial de precios (ej. de Knasta).
-
-    Sistema de señales escalonado estilo Steam:
-    - Señal 1a: Descuento de lista >= umbral base de la categoría (+1.0)
-    - Señal 1b: Descuento de lista >= umbral «gran oferta» (+1.0 adicional)
-      → Un -75% en producto caro alcanza 2.0 solo con el precio de lista.
-    - Señal 2: Caída >= umbral vs promedio histórico propio (+2.0, la más fuerte)
-    - Señal 3: Mínimo histórico absoluto (+0.5, refuerzo)
-
-    Umbrales adaptativos según la categoría (barata vs cara):
-    - Categorías Caras (referencia >= S/300): base 50%, «gran oferta» 70%
-    - Categorías Baratas (referencia < S/300): base 70%, «gran oferta» 85%
+    el precio de lista de la tienda, su historial propio y el consenso de mercado.
     """
     de = cfg["deal_engine"]
     weights = de["weights"]
@@ -50,8 +40,6 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
                           reasons=["Excluido: no coincide con palabras clave de la categoría"])
 
     # Extraer historial, descartando precios placeholder/irreales.
-    # Knasta a veces guarda S/99999 cuando no tiene dato real; esos valores
-    # harían explotar el promedio e inflarían el score artificialmente.
     MAX_SANE_PRICE = 50_000
     historical_prices = [
         p for p, _ in price_history
@@ -61,9 +49,16 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
     hist_min = min(historical_prices) if has_history else None
     hist_avg = (sum(historical_prices) / len(historical_prices)) if has_history else None
 
+    # Validar si el precio de lista de la tienda está inflado respecto al mercado
+    effective_original_price = original_price
+    if market_consensus_price and original_price:
+        if original_price > market_consensus_price * 1.25:
+            # El precio tachado de la tienda es irrealo inflado (ej: S/7199 vs S/2789 en mercado)
+            effective_original_price = market_consensus_price
+
     # 3. GATE de "Piso de Precio" específico de la categoría
     min_reference_price = category_profile.get("min_reference_price", 0)
-    reference_price = max(original_price or 0, hist_avg or 0)
+    reference_price = max(effective_original_price or 0, hist_avg or 0, market_consensus_price or 0)
 
     if reference_price < min_reference_price:
         return DealResult(
@@ -74,7 +69,7 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
     # 4. Umbrales adaptativos estilo Steam
     is_expensive = reference_price >= 300
     discount_threshold = 50 if is_expensive else 70        # umbral base
-    discount_threshold_mega = 60 if is_expensive else 85   # umbral «gran oferta» (≥60% en caro = compra clara)
+    discount_threshold_mega = 60 if is_expensive else 85   # umbral «gran oferta»
     avg_threshold = 50 if is_expensive else 70
 
     score = 0.0
@@ -82,24 +77,22 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
 
     # Señal 1a: Descuento tachado >= umbral base (+1.0)
     # Señal 1b: Descuento tachado >= umbral «gran oferta» (+1.0 adicional)
-    # Guard de credibilidad: el precio de lista no es creible si:
-    #  - Con historial propio: original_price > hist_avg * 3 (truco de marketplace)
-    #  - Sin historial: original_price > current_price * 5 (inflacion obvia)
     if has_history and hist_avg:
-        list_price_credible = (original_price is not None) and (original_price <= hist_avg * 3)
+        list_price_credible = (effective_original_price is not None) and (effective_original_price <= hist_avg * 3)
     else:
-        list_price_credible = (original_price is not None) and (original_price <= current_price * 5)
-    if original_price and original_price > current_price > 0:
-        discount_pct = (1 - current_price / original_price) * 100
+        list_price_credible = (effective_original_price is not None) and (effective_original_price <= current_price * 5)
+
+    if effective_original_price and effective_original_price > current_price > 0:
+        discount_pct = (1 - current_price / effective_original_price) * 100
         if discount_pct >= discount_threshold:
             score += weights["discount_pct_high"]
             reasons.append(
-                f"Descuento de {discount_pct:.0f}% vs precio de lista (S/{original_price:.0f})"
+                f"Descuento de {discount_pct:.0f}% vs precio de lista/mercado (S/{effective_original_price:.0f})"
             )
         if list_price_credible and discount_pct >= discount_threshold_mega:
             score += weights["discount_pct_high"]
             reasons.append(
-                f"Gran descuento de lista: {discount_pct:.0f}% (>={discount_threshold_mega:.0f}%)"
+                f"Gran descuento de lista/mercado: {discount_pct:.0f}% (>={discount_threshold_mega:.0f}%)"
             )
 
     # Señales 2 y 3: Caída respecto al historial propio

@@ -22,7 +22,7 @@ import yaml
 
 from core import storage
 from core.deal_engine import evaluate
-from core.knasta import get_knasta_history
+from core.knasta import get_knasta_history, get_market_consensus_price
 from notifiers.discord import send_discord_alert
 from notifiers.telegram import send_telegram_alert
 from notifiers.webpush import send_webpush_alert
@@ -112,9 +112,14 @@ async def process_product(cfg, store_name, category_url, scraped, seen_urls, cat
         if knasta_history:
             storage.backfill_price_history(product_id, knasta_history)
             # Volver a cargar el historial recién guardado
-            history = storage.get_price_history(product_id)
+    market_consensus = None
+    if len(history) < 3 or (scraped.original_price and scraped.original_price > scraped.price * 1.5):
+        market_consensus = await get_market_consensus_price(scraped.title)
 
-    result = evaluate(scraped.title, scraped.price, scraped.original_price, history, cfg, category_profile)
+    result = evaluate(
+        scraped.title, scraped.price, scraped.original_price, history, cfg, category_profile,
+        market_consensus_price=market_consensus
+    )
 
     storage.record_price_point(
         product_id, scraped.price, scraped.original_price, scraped.in_stock

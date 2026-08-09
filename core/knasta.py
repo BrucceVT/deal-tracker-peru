@@ -138,3 +138,87 @@ async def get_knasta_history(title: str, store_url: str, store_name: str) -> lis
         history.sort(key=lambda x: x[1], reverse=True)
         log.info("Knasta: Se recuperó exitosamente historial de %d días para '%s'", len(history), title)
         return history
+
+
+def extract_clean_model(title: str) -> str | None:
+    """
+    Extrae la marca y/o el código de modelo principal de un título descriptivo de tienda.
+    Ejemplos:
+    - "IMPRESORA  MULTIFUNCIONAL A3 MFC - T4500DW Dúplex ADF Wifi" -> "MFC-T4500DW"
+    - "Televisor smart Hisense 55 4K UHD Hi-QLED Vidaa 55QD5SV 2026" -> "Hisense 55QD5SV"
+    - "Monitor Gamer Acer Nitro VG272 LVBMIIPX 27\" Full HD 165Hz" -> "Acer VG272"
+    """
+    model_patterns = [
+        r"\b([A-Za-z]{2,5}\s*-\s*[A-Za-z0-9]{4,10})\b",       # MFC-T4500DW, TE-2788G
+        r"\b([0-9]{2}[A-Za-z]{1,4}[0-9]{1,4}[A-Za-z0-9]*)\b", # 55QD5SV, 27MS500, 27G411A
+        r"\b([A-Za-z]{2,4}[0-9]{3,5}[A-Za-z0-9]*)\b",        # VG272, GS25F14, VX1655
+    ]
+
+    found_model = None
+    for pat in model_patterns:
+        match = re.search(pat, title)
+        if match:
+            found_model = match.group(1).replace(" ", "")
+            break
+
+    brands = ["brother", "acer", "hisense", "samsung", "lg", "hp", "lenovo", "asus", "epson", "canon", "teros", "viewsonic", "gigabyte"]
+    found_brand = None
+    title_lower = title.lower()
+    for b in brands:
+        if b in title_lower:
+            found_brand = b.capitalize()
+            break
+
+    if found_brand and found_model:
+        return f"{found_brand} {found_model}"
+    elif found_model:
+        return found_model
+    elif found_brand:
+        return found_brand
+    return None
+
+
+async def get_market_consensus_price(title: str) -> float | None:
+    """
+    Consulta a Knasta usando el modelo limpio extraído del título para
+    obtener la mediana del precio actual de mercado en Perú entre múltiples tiendas.
+    """
+    import statistics
+
+    clean_query = extract_clean_model(title)
+    if not clean_query:
+        return None
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    try:
+        async with httpx.AsyncClient(timeout=8, headers=headers, follow_redirects=True) as client:
+            resp = await client.get("https://knasta.pe/api/results", params={"q": clean_query})
+            if resp.status_code != 200:
+                return None
+
+            products = resp.json().get("products", [])
+            prices = []
+            for p in products:
+                price = p.get("price")
+                if price and isinstance(price, (int, float)) and price > 0:
+                    prices.append(float(price))
+                elif isinstance(price, str):
+                    cleaned = re.sub(r"[^\d.]", "", price)
+                    if cleaned:
+                        try:
+                            prices.append(float(cleaned))
+                        except ValueError:
+                            pass
+
+            if len(prices) < 2:
+                return None
+
+            median_price = float(statistics.median(prices))
+            log.info("Knasta Market Consensus: Mediana S/%.2f (%d ofertas) para '%s'", median_price, len(prices), clean_query)
+            return median_price
+    except Exception as e:
+        log.warning("Knasta Market Consensus: Error consultando consenso para '%s': %s", clean_query, e)
+        return None
+
