@@ -6,7 +6,7 @@ import httpx
 log = logging.getLogger("deal-tracker")
 
 
-async def send_discord_alert(cfg: dict, product, deal_result, store_name: str):
+async def send_discord_alert(cfg: dict, product, deal_result, store_name: str, other_offers: list = None):
     settings = cfg["notifications"]["discord"]
     if not settings.get("enabled"):
         return
@@ -18,7 +18,7 @@ async def send_discord_alert(cfg: dict, product, deal_result, store_name: str):
     discount_pct = None
     if product.original_price and product.original_price > product.price:
         discount_pct = (1 - product.price / product.original_price) * 100
-        
+
     discount_field = f"**-{discount_pct:.0f}%**" if discount_pct else "N/D"
 
     # Determinar nivel de confianza/fuerza de la oferta
@@ -31,22 +31,38 @@ async def send_discord_alert(cfg: dict, product, deal_result, store_name: str):
         fuerza = "📈 Alta"
     else:
         fuerza = "✅ Buena Oferta"
-        
+
     fuerza_field = f"**{fuerza}** ({score_val:.1f})"
+
+    fields = [
+        {"name": "🏪 Tienda Principal", "value": f"**{store_name.upper()}** (¡Mejor Precio!)", "inline": True},
+        {"name": "💰 Precio Oferta", "value": f"**S/ {product.price:.2f}**", "inline": True},
+        {"name": "🏷️ Lista / Tachado", "value": f"S/ {product.original_price:.2f}" if product.original_price else "N/D", "inline": True},
+        {"name": "📉 Dto. Tienda", "value": discount_field, "inline": True},
+        {"name": "⚡ Confianza de Alerta", "value": fuerza_field, "inline": True},
+        {"name": "📦 Stock", "value": "✅ Disponible" if product.in_stock else "⚠️ Verificar en Tienda", "inline": True},
+    ]
+
+    if other_offers:
+        lines = []
+        for alt in other_offers:
+            alt_store = alt.store.upper()
+            alt_price = alt.product.price
+            alt_url = alt.product.url
+            lines.append(f"• **{alt_store}**: S/ {alt_price:.2f} — [Ver en {alt_store}]({alt_url})")
+
+        fields.append({
+            "name": "🛍️ Comparativa en Otras Tiendas",
+            "value": "\n".join(lines),
+            "inline": False
+        })
 
     embed = {
         "title": product.title[:250],
         "url": product.url,
         "description": "\n".join(f"• {r}" for r in deal_result.reasons),
         "color": 0x2ecc71,
-        "fields": [
-            {"name": "🏪 Tienda", "value": f"**{store_name.upper()}**", "inline": True},
-            {"name": "💰 Precio Oferta", "value": f"**S/ {product.price:.2f}**", "inline": True},
-            {"name": "🏷️ Lista / Tachado", "value": f"S/ {product.original_price:.2f}" if product.original_price else "N/D", "inline": True},
-            {"name": "📉 Dto. Tienda", "value": discount_field, "inline": True},
-            {"name": "⚡ Confianza de Alerta", "value": fuerza_field, "inline": True},
-            {"name": "📦 Stock", "value": "✅ Disponible" if product.in_stock else "⚠️ Verificar en Tienda", "inline": True},
-        ],
+        "fields": fields,
         "thumbnail": {"url": product.image_url} if product.image_url else None,
     }
 
