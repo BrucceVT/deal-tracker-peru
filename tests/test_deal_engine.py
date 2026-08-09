@@ -134,7 +134,9 @@ def test_combined_signals_sum_score(base_cfg, laptop_profile):
     history = [(4800.0, 100), (5000.0, 90)]
     result = evaluate("Laptop HP Pavilion 15 i7", 900, 5000, history, base_cfg, laptop_profile)
     assert result.is_deal is True
-    assert result.score == 3.5  # 1.0 + 0.5 + 2.0
+    # 1.0 (descuento base -82%) + 1.0 (gran oferta -82% >= 60%) + 2.0 (historial) + 0.5 (mínimo) = 4.5
+    # S/5000 lista vs hist_avg S/4900 → credible (5000 <= 4900*3=14700) → señal mega activa
+    assert result.score == 4.5
 
 
 def test_refurbished_is_excluded_before_gate(base_cfg, laptop_profile):

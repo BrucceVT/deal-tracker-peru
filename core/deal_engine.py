@@ -19,16 +19,23 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
     """
     Evalúa si un producto es una oferta real basándose en su precio actual,
     el precio de lista de la tienda y su historial de precios (ej. de Knasta).
-    
-    Aplica límites adaptativos según la categoría (barata vs cara):
-    - Categorías Caras (Piso >= S/300): Detección desde 50% de caída.
-    - Categorías Baratas (Piso < S/300): Detección desde 70% de caída.
+
+    Sistema de señales escalonado estilo Steam:
+    - Señal 1a: Descuento de lista >= umbral base de la categoría (+1.0)
+    - Señal 1b: Descuento de lista >= umbral «gran oferta» (+1.0 adicional)
+      → Un -75% en producto caro alcanza 2.0 solo con el precio de lista.
+    - Señal 2: Caída >= umbral vs promedio histórico propio (+2.0, la más fuerte)
+    - Señal 3: Mínimo histórico absoluto (+0.5, refuerzo)
+
+    Umbrales adaptativos según la categoría (barata vs cara):
+    - Categorías Caras (referencia >= S/300): base 50%, «gran oferta» 70%
+    - Categorías Baratas (referencia < S/300): base 70%, «gran oferta» 85%
     """
     de = cfg["deal_engine"]
     weights = de["weights"]
     min_score = de["min_score"]
     exclude_keywords = cfg.get("exclude_keywords", [])
-    
+
     title_lower = product_title.lower()
 
     # 1. Filtro global de exclusión (accesorios, reacondicionados, etc.)
@@ -57,7 +64,7 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
     # 3. GATE de "Piso de Precio" específico de la categoría
     min_reference_price = category_profile.get("min_reference_price", 0)
     reference_price = max(original_price or 0, hist_avg or 0)
-    
+
     if reference_price < min_reference_price:
         return DealResult(
             is_deal=False, score=0.0,
@@ -66,13 +73,22 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
 
     # 4. Umbrales adaptativos estilo Steam
     is_expensive = reference_price >= 300
-    discount_threshold = 50 if is_expensive else 70
+    discount_threshold = 50 if is_expensive else 70        # umbral base
+    discount_threshold_mega = 60 if is_expensive else 85   # umbral «gran oferta» (≥60% en caro = compra clara)
     avg_threshold = 50 if is_expensive else 70
 
     score = 0.0
     reasons = []
 
-    # Señal 1: Descuento tachado declarado por la tienda (refuerzo)
+    # Señal 1a: Descuento tachado >= umbral base (+1.0)
+    # Señal 1b: Descuento tachado >= umbral «gran oferta» (+1.0 adicional)
+    # Guard de credibilidad: el precio de lista no es creible si:
+    #  - Con historial propio: original_price > hist_avg * 3 (truco de marketplace)
+    #  - Sin historial: original_price > current_price * 5 (inflacion obvia)
+    if has_history and hist_avg:
+        list_price_credible = (original_price is not None) and (original_price <= hist_avg * 3)
+    else:
+        list_price_credible = (original_price is not None) and (original_price <= current_price * 5)
     if original_price and original_price > current_price > 0:
         discount_pct = (1 - current_price / original_price) * 100
         if discount_pct >= discount_threshold:
@@ -80,8 +96,13 @@ def evaluate(product_title: str, current_price: float, original_price: float | N
             reasons.append(
                 f"Descuento de {discount_pct:.0f}% vs precio de lista (S/{original_price:.0f})"
             )
+        if list_price_credible and discount_pct >= discount_threshold_mega:
+            score += weights["discount_pct_high"]
+            reasons.append(
+                f"Gran descuento de lista: {discount_pct:.0f}% (>={discount_threshold_mega:.0f}%)"
+            )
 
-    # Señales 2 y 3: Caída respecto al historial
+    # Señales 2 y 3: Caída respecto al historial propio
     if has_history:
         if hist_avg > 0:
             avg_drop_pct = (1 - current_price / hist_avg) * 100
