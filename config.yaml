@@ -51,6 +51,32 @@ exclude_keywords:
   - cartucho
   - cinta
   - tambor
+  # Exclusiones de alimentos/abarrotes/bebidas
+  - arroz
+  - aceite
+  - leche
+  - fideos
+  - azucar
+  - azúcar
+  - gaseosa
+  - cerveza
+  - vino
+  - whisky
+  - ron
+  - vodka
+  - pisco
+  - pañal
+  - panal
+  - detergente
+  - suavizante
+  - papel higiénico
+  - papel higienico
+  - toalla
+  - snack
+  - chocolate
+  - galleta
+  - alimento para perro
+  - alimento para gato
 
 # --- Perfiles de Categoría ---
 # Cada perfil define el piso de "producto real" (bajo esto se descarta)
@@ -71,12 +97,8 @@ category_profiles:
     min_reference_price: 150
   electrodomesticos:
     min_reference_price: 80
-  cuidado_personal:
-    min_reference_price: 15
   ropa_zapatos:
     min_reference_price: 40
-  despensa_licores:
-    min_reference_price: 15
 
 # --- Motor de decisión: combinación de señales ---
 deal_engine:
@@ -110,8 +132,6 @@ stores:
         type: ropa_zapatos
       - url: "https://www.falabella.com.pe/falabella-pe/category/cat2009/Electrodomesticos-de-Cocina"
         type: electrodomesticos
-      - url: "https://www.falabella.com.pe/falabella-pe/category/cat4014/Perfumes"
-        type: cuidado_personal
   ripley:
     enabled: true
     base_url: "https://simple.ripley.com.pe"
@@ -132,16 +152,8 @@ stores:
         type: celulares
       - url: "https://www.plazavea.com.pe/tecnologia/tablets"
         type: tablets
-      - url: "https://www.plazavea.com.pe/cuidado-personal/cabello/shampoo"
-        type: cuidado_personal
-      - url: "https://www.plazavea.com.pe/cuidado-personal/cuidado-de-la-piel/cuidado-facial/cremas-faciales"
-        type: cuidado_personal
       - url: "https://www.plazavea.com.pe/electrohogar/electrodomesticos-de-cocina"
         type: electrodomesticos
-      - url: "https://www.plazavea.com.pe/supermercado/abarrotes"
-        type: despensa_licores
-      - url: "https://www.plazavea.com.pe/supermercado/vinos-y-licores"
-        type: despensa_licores
   oechsle:
     enabled: true
     base_url: "https://www.oechsle.pe"
@@ -176,18 +188,10 @@ stores:
     categories:
       - url: "https://www.metro.pe/tecnologia"
         type: tecnologia_general
-      - url: "https://www.metro.pe/cuidado-personal/cuidado-del-cabello/shampoo"
-        type: cuidado_personal
-      - url: "https://www.metro.pe/cuidado-personal/cuidado-de-la-piel/cuidado-facial/cremas-faciales"
-        type: cuidado_personal
       - url: "https://www.metro.pe/electrohogar/electrodomesticos-de-cocina"
         type: electrodomesticos
-      - url: "https://www.metro.pe/abarrotes"
-        type: despensa_licores
-      - url: "https://www.metro.pe/bebidas-y-licores"
-        type: despensa_licores
   wong:
-    enabled: false
+    enabled: true
     base_url: "https://www.wong.pe"
     categories:
       - url: "https://www.wong.pe/tecnologia"
